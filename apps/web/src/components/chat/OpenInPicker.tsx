@@ -187,6 +187,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   keybindings,
   availableEditors,
   openInCwd,
+  openInTarget = "folder",
   compact = false,
   enableShortcut = true,
 }: {
@@ -194,6 +195,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
   openInCwd: string | null;
+  openInTarget?: "folder" | "file";
   compact?: boolean;
   enableShortcut?: boolean;
 }) {
@@ -217,6 +219,15 @@ export const OpenInPicker = memo(function OpenInPicker({
       if (!openInCwd) return;
       const editor = editorId ?? preferredEditor;
       if (!editor) return;
+      if (remote.mode === "browser-editor") {
+        const url = new URL(remote.baseUrl);
+        url.searchParams.delete("folder");
+        url.searchParams.delete("file");
+        url.searchParams.set(openInTarget, openInCwd);
+        window.open(url.href, "_blank", "noopener,noreferrer");
+        setPreferredEditor(editor);
+        return;
+      }
       if (remote.mode === "remote-unavailable") return;
       if (remote.mode === "remote-links") {
         const url = buildRemoteOpenUrl({
@@ -248,6 +259,7 @@ export const OpenInPicker = memo(function OpenInPicker({
       environmentId,
       markRemoteHintSeen,
       openInCwd,
+      openInTarget,
       openInEditorMutation,
       preferredEditor,
       remote,
@@ -316,7 +328,7 @@ export const OpenInPicker = memo(function OpenInPicker({
               {options.map(({ label, Icon, value, kind }) => (
                 <MenuItem key={value} onClick={() => openInEditor(value)}>
                   <Icon aria-hidden="true" className={getOpenInIconClass(kind)} />
-                  {label}
+                  {remote.mode === "browser-editor" ? "VS Code (browser)" : label}
                   {value === preferredEditor && openFavoriteEditorShortcutLabel && (
                     <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
                   )}

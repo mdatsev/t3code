@@ -41,6 +41,13 @@ const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.tr
 const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim() || "";
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
+const configuredBrowserVscodeUrl = process.env.VITE_BROWSER_VSCODE_URL?.trim() || "";
+if (configuredBrowserVscodeUrl) {
+  const url = new URL(configuredBrowserVscodeUrl);
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+    throw new Error("VITE_BROWSER_VSCODE_URL must be an HTTP(S) URL without credentials.");
+  }
+}
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
@@ -196,6 +203,7 @@ export default defineConfig(() => {
       ],
     },
     define: {
+      "import.meta.env.VITE_BROWSER_VSCODE_URL": JSON.stringify(configuredBrowserVscodeUrl),
       // In dev mode, tell the web app where the WebSocket server lives
       "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
       // Pinned explicitly rather than left to Vite's automatic VITE_ exposure:
