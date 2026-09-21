@@ -1,3 +1,4 @@
+import { CommandOutput } from "./CommandOutput";
 import { ArrowUpIcon, ClockIcon } from "lucide-react";
 import { ReadOnlySourcePreview } from "../files/AttachmentFilePreview";
 import { useRightPanelStore } from "~/rightPanelStore";
@@ -4363,13 +4364,29 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
       {expanded && workEntry.questionAnswer ? (
         <QuestionAnswerHistory answer={workEntry.questionAnswer} />
       ) : null}
-      {expanded && canExpand && expandedBody && !workEntry.questionAnswer ? (
+      {expanded && canExpand && (expandedBody || workEntry.command) && !workEntry.questionAnswer ? (
         <div
           className="mt-1 ms-7 cursor-default rounded-md bg-muted/40 px-3 py-2"
           onClick={stopRowToggle}
           onPointerDown={stopRowToggle}
         >
-          <pre className={toolCallExpandedBodyClassName}>{expandedBody}</pre>
+          <pre className={toolCallExpandedBodyClassName}>
+            {threadRef && workEntry.command ? (
+              <CommandOutput
+                threadRef={threadRef}
+                activityId={workEntry.sourceActivityId ?? workEntry.id}
+                fallback={expandedBody ?? ""}
+                preview={workEntry.detail ?? ""}
+                command={
+                  workEntry.command.trim() === previewText.trim()
+                    ? ""
+                    : (workEntryRawCommand(workEntry) ?? workEntry.command)
+                }
+              />
+            ) : (
+              expandedBody
+            )}
+          </pre>
         </div>
       ) : null}
     </div>

@@ -1341,6 +1341,7 @@ function renderFeedEntry(
   props: Pick<
     ThreadFeedProps,
     | "environmentId"
+    | "threadId"
     | "onUseArtifactTemplate"
     | "skills"
     | "dispatchingMessageId"
@@ -1703,6 +1704,7 @@ function renderFeedEntry(
       // Anchors/details live in ThreadFeed and survive this group-only remount.
       key={`${entry.id}:${props.workRowSizing.textSizeKey}`}
       activities={entry.activities}
+      threadId={props.threadId}
       environmentId={props.environmentId}
       anchorKey={entry.id}
       copiedRowId={props.copiedRowId}
@@ -2657,6 +2659,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       >
         <ThreadMediaVisibility>
           {renderFeedEntry(info, {
+            threadId: props.threadId,
             environmentId: props.environmentId,
             dispatchingMessageId: props.dispatchingMessageId,
             onEditPendingMessage: props.onEditPendingMessage,
@@ -2717,6 +2720,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       onToggleWorkGroup,
       onToggleWorkRow,
       props.environmentId,
+      props.threadId,
       props.onUseArtifactTemplate,
       props.skills,
       renderMarkdownImage,

@@ -81,6 +81,7 @@ export interface ThreadFeedActivity {
 }
 
 export interface WorkLogEntry {
+  sourceActivityId?: string;
   readonly questionAnswer?: UserInputAttachmentAnswerPayload;
   id: string;
   createdAt: string;
@@ -490,6 +491,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
       : undefined;
   const entry: DerivedWorkLogEntry = {
     id: activity.id,
+    sourceActivityId: activity.id,
     createdAt: activity.createdAt,
     turnId: activity.turnId,
     ...(taskId ? { taskId } : {}),

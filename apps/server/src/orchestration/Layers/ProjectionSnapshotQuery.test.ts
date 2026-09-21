@@ -110,6 +110,56 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect(
+    "loads paginated command output without projecting it or crossing thread boundaries",
+    () =>
+      Effect.gen(function* () {
+        const query = yield* ProjectionSnapshotQuery;
+        const sql = yield* SqlClient.SqlClient;
+        const threadId = ThreadId.make("output-thread");
+        yield* sql`INSERT INTO projection_threads
+        (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, created_at, updated_at)
+        VALUES (${threadId}, 'output-project', 'Output', '{"instanceId":"codex","model":"gpt-5-codex"}', 'full-access', 'default', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`;
+        const output = "a".repeat(16_383) + "😀\nsecond line\nlast line";
+        const payload = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+          itemType: "command_execution",
+          data: { item: { aggregatedOutput: output } },
+        });
+        yield* sql`INSERT INTO projection_thread_activities
+        (activity_id, thread_id, turn_id, tone, kind, summary, payload_json, sequence, created_at)
+        VALUES ('output-activity', ${threadId}, NULL, 'tool', 'tool.completed', 'Ran command', ${payload}, 1, '2026-09-01T00:00:00Z')`;
+        const first = yield* query.getCommandOutput({
+          threadId,
+          activityId: "output-activity",
+          offset: 0,
+        });
+        assert.equal(first.text, "a".repeat(16_383));
+        assert.equal(first.nextOffset, 16_383);
+        const second = yield* query.getCommandOutput({
+          threadId,
+          activityId: "output-activity",
+          offset: first.nextOffset!,
+        });
+        assert.equal(first.text + second.text, output);
+        assert.equal(second.nextOffset, null);
+        const missing = yield* query
+          .getCommandOutput({
+            threadId: ThreadId.make("other-thread"),
+            activityId: "output-activity",
+            offset: 0,
+          })
+          .pipe(Effect.flip);
+        assert.equal(missing._tag, "OrchestrationGetCommandOutputError");
+        yield* sql`UPDATE projection_threads SET deleted_at = '2026-09-02T00:00:00Z' WHERE thread_id = ${threadId}`;
+        const deleted = yield* query
+          .getCommandOutput({ threadId, activityId: "output-activity", offset: 0 })
+          .pipe(Effect.flip);
+        assert.equal(deleted._tag, "OrchestrationGetCommandOutputError");
+        yield* sql`DELETE FROM projection_thread_activities WHERE thread_id = ${threadId}`;
+        yield* sql`DELETE FROM projection_threads WHERE thread_id = ${threadId}`;
+      }),
+  );
+
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;

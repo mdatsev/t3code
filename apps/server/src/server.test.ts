@@ -999,6 +999,7 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
+          getCommandOutput: () => Effect.die("unused"),
           getUserInputActivity: () => Effect.die("unused"),
           getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
           getSnapshot: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
@@ -8383,6 +8384,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
+            getCommandOutput: (input) => {
+              assert.equal(input.threadId, ThreadId.make("thread-1"));
+              assert.equal(input.activityId, "command-1");
+              assert.equal(input.offset, 0);
+              return Effect.succeed({ text: "first line\nsecond line\n", nextOffset: null });
+            },
             getSnapshot: () => Effect.succeed(snapshot),
             searchThreads: () =>
               Effect.succeed({
@@ -8432,6 +8439,17 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
       assert.equal(dispatchResult.sequence, 7);
+
+      const output = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.getCommandOutput]({
+            threadId: ThreadId.make("thread-1"),
+            activityId: "command-1",
+            offset: 0,
+          }),
+        ),
+      );
+      assert.deepEqual(output, { text: "first line\nsecond line\n", nextOffset: null });
 
       const turnDiffResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>

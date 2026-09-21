@@ -1,3 +1,4 @@
+import { CommandOutput } from "./CommandOutput";
 import { QuestionAnswerHistory } from "./QuestionAnswerHistory";
 import {
   getQuestionAnswerPreview,
@@ -32,7 +33,7 @@ import {
   View,
 } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import type { EnvironmentId, ToolActivityIcon } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId, ToolActivityIcon } from "@t3tools/contracts";
 import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
 
 import { AppText as Text } from "../../components/AppText";
@@ -411,6 +412,7 @@ export function collapsedWorkLogHeight(activities: ReadonlyArray<ThreadFeedActiv
 }
 
 interface ThreadWorkLogProps {
+  readonly threadId: ThreadId;
   readonly activities: ReadonlyArray<ThreadFeedActivity>;
   readonly anchorKey: string;
   readonly environmentId: EnvironmentId;
@@ -437,6 +439,7 @@ export function ThreadWorkLog(props: ThreadWorkLogProps) {
         copied={props.copiedRowId === row.id}
         expanded={props.expandedRows[row.id] ?? false}
         environmentId={props.environmentId}
+        threadId={props.threadId}
         iconSubtleColor={props.iconSubtleColor}
         onCopyRow={props.onCopyRow}
         onToggleRow={props.onToggleRow}
@@ -448,6 +451,7 @@ export function ThreadWorkLog(props: ThreadWorkLogProps) {
       props.anchorKey,
       props.copiedRowId,
       props.expandedRows,
+      props.threadId,
       props.environmentId,
       props.iconSubtleColor,
       props.onCopyRow,
@@ -877,7 +881,8 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
         </View>
       </Pressable>
 
-      {expanded && (fullDetail || viewedImagePath || row.workEntry.questionAnswer) ? (
+      {expanded &&
+      (fullDetail || row.workEntry.command || viewedImagePath || row.workEntry.questionAnswer) ? (
         <Animated.View
           entering={WORK_LOG_DETAIL_ENTER_TRANSITION}
           exiting={WORK_LOG_DETAIL_EXIT_TRANSITION}
@@ -902,9 +907,20 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
             className="max-h-60"
             contentContainerStyle={{ paddingRight: 8 }}
           >
-            <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">
-              {fullDetail}
-            </Text>
+            {row.workEntry.command ? (
+              <CommandOutput
+                environmentId={props.environmentId}
+                threadId={props.threadId}
+                activityId={row.workEntry.sourceActivityId ?? row.workEntry.id}
+                fallback={fullDetail ?? ""}
+                command={row.workEntry.rawCommand ?? row.workEntry.command}
+                preview={row.workEntry.detail ?? ""}
+              />
+            ) : (
+              <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">
+                {fullDetail}
+              </Text>
+            )}
           </ScrollView>
         </Animated.View>
       ) : null}

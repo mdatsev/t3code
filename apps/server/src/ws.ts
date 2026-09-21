@@ -44,6 +44,7 @@ import {
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetSnapshotError,
   OrchestrationSearchThreadsError,
+  OrchestrationGetCommandOutputError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
@@ -1899,6 +1900,22 @@ const makeWsRpcLayer = (
                       message: "Failed to dispatch orchestration command",
                       cause,
                     }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.getCommandOutput]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getCommandOutput,
+            projectionSnapshotQuery.getCommandOutput(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationGetCommandOutputError({
+                    message:
+                      cause._tag === "OrchestrationGetCommandOutputError"
+                        ? cause.message
+                        : "Could not load command output.",
+                  }),
               ),
             ),
             { "rpc.aggregate": "orchestration" },

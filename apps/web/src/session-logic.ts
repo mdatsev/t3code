@@ -54,6 +54,7 @@ export {
 } from "@t3tools/client-runtime/work-log/presentation";
 
 export interface WorkLogEntry {
+  sourceActivityId?: string;
   questionAnswer?: UserInputAttachmentAnswerPayload;
   id: string;
   createdAt: string;
@@ -579,6 +580,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   const toolCallId = isTaskActivity ? null : extractToolCallId(payload);
   const entry: DerivedWorkLogEntry = {
     id: activity.id,
+    sourceActivityId: activity.id,
     createdAt: activity.createdAt,
     turnId: activity.turnId,
     label: taskLabel || activity.summary,

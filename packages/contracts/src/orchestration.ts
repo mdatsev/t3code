@@ -34,6 +34,7 @@ import {
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
+  getCommandOutput: "orchestration.getCommandOutput",
   getWorkflowScript: "orchestration.getWorkflowScript",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
@@ -2218,6 +2219,24 @@ export const OrchestrationSearchThreadsResult = Schema.Struct({
 });
 export type OrchestrationSearchThreadsResult = typeof OrchestrationSearchThreadsResult.Type;
 
+export const OrchestrationGetCommandOutputInput = Schema.Struct({
+  threadId: ThreadId,
+  activityId: TrimmedNonEmptyString,
+  offset: NonNegativeInt,
+});
+export type OrchestrationGetCommandOutputInput = typeof OrchestrationGetCommandOutputInput.Type;
+
+export const OrchestrationGetCommandOutputResult = Schema.Struct({
+  text: Schema.String,
+  nextOffset: Schema.NullOr(NonNegativeInt),
+});
+export type OrchestrationGetCommandOutputResult = typeof OrchestrationGetCommandOutputResult.Type;
+
+export class OrchestrationGetCommandOutputError extends Schema.TaggedError<OrchestrationGetCommandOutputError>()(
+  "OrchestrationGetCommandOutputError",
+  { message: Schema.String },
+) {}
+
 export const OrchestrationGetWorkflowScriptInput = Schema.Struct({
   threadId: ThreadId,
   /** Absolute path from the workflow's runHandles.scriptPath. The server
@@ -2270,6 +2289,10 @@ export const OrchestrationRpcSchemas = {
   dispatchCommand: {
     input: ClientOrchestrationCommand,
     output: DispatchResult,
+  },
+  getCommandOutput: {
+    input: OrchestrationGetCommandOutputInput,
+    output: OrchestrationGetCommandOutputResult,
   },
   getWorkflowScript: {
     input: OrchestrationGetWorkflowScriptInput,

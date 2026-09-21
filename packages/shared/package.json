@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./commandOutput": {
+      "types": "./src/commandOutput.ts",
+      "import": "./src/commandOutput.ts"
+    },
     "./legacyCliLauncher": {
       "types": "./src/legacyCliLauncher.ts",
       "import": "./src/legacyCliLauncher.ts"

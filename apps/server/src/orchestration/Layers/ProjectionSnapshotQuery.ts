@@ -1,4 +1,6 @@
 import {
+  OrchestrationGetCommandOutputInput,
+  OrchestrationGetCommandOutputError,
   AgentSessionImportSource,
   ApprovalRequestId,
   ChatAttachment,
@@ -35,12 +37,14 @@ import {
   ThreadPullRequestStack,
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
+import { extractCommandOutputText } from "@t3tools/shared/commandOutput";
 import { legacyLinkedPullRequestOf } from "@t3tools/shared/threadPullRequests";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -1414,6 +1418,47 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           created_at ASC,
           activity_id ASC
       `,
+  });
+
+  const getCommandActivityRow = SqlSchema.findOneOption({
+    Request: OrchestrationGetCommandOutputInput,
+    Result: ProjectionThreadActivityDbRowSchema,
+    execute: ({ threadId, activityId }) => sql`
+      SELECT activity_id AS "activityId", thread_id AS "threadId", turn_id AS "turnId",
+        tone, kind, summary, payload_json AS "payload", sequence, created_at AS "createdAt"
+      FROM projection_thread_activities
+      WHERE thread_id = ${threadId} AND activity_id = ${activityId}
+        AND kind IN ('tool.started', 'tool.updated', 'tool.completed')
+        AND EXISTS (SELECT 1 FROM projection_threads WHERE thread_id = ${threadId} AND deleted_at IS NULL)
+    `,
+  });
+
+  const getCommandOutput = Effect.fn("ProjectionSnapshotQuery.getCommandOutput")(function* (
+    input: typeof OrchestrationGetCommandOutputInput.Type,
+  ) {
+    const row = yield* getCommandActivityRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getCommandOutput:query",
+          "ProjectionSnapshotQuery.getCommandOutput:decodeRow",
+        ),
+      ),
+    );
+    if (Option.isNone(row)) {
+      return yield* new OrchestrationGetCommandOutputError({
+        message: "Command output is no longer available.",
+      });
+    }
+    const activity = mapThreadActivityRow(row.value);
+    const output =
+      extractCommandOutputText(
+        Predicate.hasProperty(activity.payload, "data") ? activity.payload.data : null,
+      ) ?? "";
+    // Each activity is immutable. Page by UTF-16 offset without splitting surrogate pairs.
+    let end = Math.min(input.offset + 16_384, output.length);
+    const last = output.charCodeAt(end - 1);
+    if (end < output.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
+    return { text: output.slice(input.offset, end), nextOffset: end < output.length ? end : null };
   });
 
   const getUserInputActivityRow = SqlSchema.findOneOption({
@@ -3725,6 +3770,7 @@ pending_approval_requests AS (
 
   return {
     getCommandReadModel,
+    getCommandOutput,
     getUserInputActivity,
     listActivitiesByKind,
     getSnapshot,

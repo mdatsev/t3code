@@ -11,6 +11,9 @@ import type {
   ApprovalRequestId,
   CheckpointRef,
   MessageId,
+  OrchestrationGetCommandOutputInput,
+  OrchestrationGetCommandOutputResult,
+  OrchestrationGetCommandOutputError,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationProject,
@@ -77,6 +80,13 @@ export interface ProjectionThreadDetailQuery {
  * ProjectionSnapshotQueryShape - Service API for read-model snapshots.
  */
 export interface ProjectionSnapshotQueryShape {
+  readonly getCommandOutput: (
+    input: OrchestrationGetCommandOutputInput,
+  ) => Effect.Effect<
+    OrchestrationGetCommandOutputResult,
+    ProjectionRepositoryError | OrchestrationGetCommandOutputError
+  >;
+
   /** Read the latest request or resolution without loading the thread history. */
   readonly getUserInputActivity: (input: {
     readonly threadId: ThreadId;

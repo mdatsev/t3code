@@ -1109,6 +1109,7 @@ describe("buildThreadFeed", () => {
     expect(group.activities).toHaveLength(1);
     expect(group.activities[0]).toMatchObject({
       id: "tool-updated",
+      workEntry: { sourceActivityId: "tool-completed" },
       createdAt: "2026-04-01T00:00:01.000Z",
       turnId: "turn-1",
       summary: "Run tests",
