@@ -2746,7 +2746,7 @@ describe("parseAgentSessionTranscript", () => {
   it("keeps the canonical first prompt after long Codex transcripts are capped", () => {
     const canonicalPrompt = "\n  Keep the canonical prompt  \n";
     const canonicalTimestamp = "2026-08-24T10:01:00.000Z";
-    const laterAssistantMessages = Array.from({ length: 200 }, (_, index) =>
+    const laterAssistantMessages = Array.from({ length: 10_000 }, (_, index) =>
       encodeTranscriptRecord({
         type: "response_item",
         timestamp: `2026-08-24T11:${String(index % 60).padStart(2, "0")}:00.000Z`,
@@ -2782,7 +2782,7 @@ describe("parseAgentSessionTranscript", () => {
       lastActiveAtMs: Date.parse("2026-08-24T12:00:00.000Z"),
     });
 
-    expect(thread?.messages).toHaveLength(200);
+    expect(thread?.messages).toHaveLength(10_000);
     expect(thread?.messages[0]).toMatchObject({
       role: "user",
       text: canonicalPrompt,
@@ -2793,7 +2793,7 @@ describe("parseAgentSessionTranscript", () => {
   it("restores the canonical first prompt when a later user message remains", () => {
     const canonicalPrompt = "\n  Keep the canonical prompt  \n";
     const canonicalTimestamp = "2026-08-24T10:01:00.000Z";
-    const assistantMessages = Array.from({ length: 198 }, (_, index) =>
+    const assistantMessages = Array.from({ length: 9_998 }, (_, index) =>
       encodeTranscriptRecord({
         type: "response_item",
         timestamp: `2026-08-24T11:${String(index % 60).padStart(2, "0")}:00.000Z`,
@@ -2844,7 +2844,7 @@ describe("parseAgentSessionTranscript", () => {
       lastActiveAtMs: Date.parse("2026-08-24T12:00:00.000Z"),
     });
 
-    expect(thread?.messages).toHaveLength(200);
+    expect(thread?.messages).toHaveLength(10_000);
     expect(thread?.messages[0]).toMatchObject({
       role: "user",
       text: canonicalPrompt,
@@ -3189,7 +3189,7 @@ describe("parseAgentSessionTranscript", () => {
     expect(thread).toBeNull();
   });
 
-  it("keeps the first prompt when later assistant output exceeds the message limit", () => {
+  it("preserves all messages beyond the previous 200-message limit", () => {
     const transcript = [
       encodeTranscriptRecord({
         type: "user",
@@ -3212,7 +3212,7 @@ describe("parseAgentSessionTranscript", () => {
       lastActiveAtMs: Date.parse("2026-08-24T12:00:00.000Z"),
     });
 
-    expect(thread?.messages).toHaveLength(200);
+    expect(thread?.messages).toHaveLength(251);
     expect(thread?.messages[0]?.text).toBe("Keep this prompt");
     expect(thread?.messages.at(-1)?.text).toBe("Assistant update 249");
   });
