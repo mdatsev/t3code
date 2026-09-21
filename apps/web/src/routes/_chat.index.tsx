@@ -18,7 +18,8 @@ import {
   useProjects,
   useThreadShells,
 } from "../state/entities";
-import { useEnvironments } from "../state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { APP_DISPLAY_NAME } from "~/branding";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 
@@ -40,6 +41,8 @@ function ChatIndexRouteView() {
  * end. Falls back to an add-project hero when no project exists yet.
  */
 function IndexDraftLanding() {
+  const { telemetryWorkspace, telemetryEvent } = Route.useSearch();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projects = useProjects();
   const threads = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
@@ -54,24 +57,61 @@ function IndexDraftLanding() {
         : null,
     [bootstrapped, projects, threads],
   );
+  const telemetryProjects = projects.filter(
+    (project) =>
+      project.environmentId === primaryEnvironmentId &&
+      project.workspaceRoot === telemetryWorkspace,
+  );
+  const targetProject = telemetryEvent
+    ? telemetryProjects.length === 1
+      ? telemetryProjects[0]!
+      : null
+    : mostRecentProject;
 
   useEffect(() => {
-    if (mostRecentProject === null || startingRef.current) {
+    if (!bootstrapped || targetProject === null || startingRef.current) {
       return;
     }
     startingRef.current = true;
-    void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
+    void handleNewThread(scopeProjectRef(targetProject.environmentId, targetProject.id), {
       replace: true,
-    }).catch(() => {
-      startingRef.current = false;
-      setStartState((state) => ({ ...state, failed: true }));
-    });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
+    })
+      .then((opened) => {
+        if (opened && telemetryEvent) {
+          const drafts = useComposerDraftStore.getState();
+          const current = drafts.getComposerDraft(opened.draftId)?.prompt ?? "";
+          // Preserve any text typed while navigation was finishing. Never submit the draft.
+          drafts.setPrompt(
+            opened.draftId,
+            `${current}${current ? "\n\n" : ""}Telemetry event: ${telemetryEvent}`,
+          );
+        }
+      })
+      .catch(() => {
+        startingRef.current = false;
+        setStartState((state) => ({ ...state, failed: true }));
+      });
+  }, [bootstrapped, handleNewThread, targetProject, telemetryEvent, startState.retryRequest]);
 
   if (!bootstrapped) {
     return null;
   }
-  if (mostRecentProject !== null) {
+  if (telemetryEvent && targetProject === null) {
+    return (
+      <SidebarInset className="h-dvh min-h-0 bg-background text-foreground">
+        <Empty className="flex-1">
+          <EmptyHeader>
+            <EmptyTitle>Telemetry project unavailable</EmptyTitle>
+            <EmptyDescription>
+              Open {telemetryWorkspace} as a project on this server, then reopen the event link. No
+              draft was created in another project.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </SidebarInset>
+    );
+  }
+  if (targetProject !== null) {
     return startState.failed ? (
       <DraftStartError
         onRetry={() => {
@@ -110,6 +150,21 @@ function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
 }
 
 export const Route = createFileRoute("/_chat/")({
+  validateSearch: (raw: Record<string, unknown>) => {
+    if (raw.telemetryWorkspace === undefined && raw.telemetryEvent === undefined) return {};
+    if (
+      typeof raw.telemetryWorkspace !== "string" ||
+      !raw.telemetryWorkspace.startsWith("/") ||
+      raw.telemetryWorkspace.length > 4096 ||
+      typeof raw.telemetryEvent !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw.telemetryEvent)
+    ) {
+      throw new Error(
+        "Invalid telemetry draft link: a project workspace and event UUID are required.",
+      );
+    }
+    return { telemetryWorkspace: raw.telemetryWorkspace, telemetryEvent: raw.telemetryEvent };
+  },
   component: ChatIndexRouteView,
 });
 
