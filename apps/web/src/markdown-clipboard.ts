@@ -81,8 +81,12 @@ function resolveCodeBlockLanguage(pre: Element): string | null {
 
 function serializeCodeBlock(pre: Element): string {
   const code = (pre.textContent ?? "").replace(/\n$/, "");
+  return serializeMarkdownCodeFence(code, resolveCodeBlockLanguage(pre) ?? "");
+}
+
+export function serializeMarkdownCodeFence(code: string, language: string) {
   const fence = codeFenceFor(code);
-  return `${fence}${resolveCodeBlockLanguage(pre) ?? ""}\n${code}\n${fence}\n\n`;
+  return `${fence}${language}\n${code}\n${fence}\n\n`;
 }
 
 function serializeTableCell(cell: Element): string {
