@@ -335,6 +335,7 @@ export function MermaidDiagram({
           <img
             src={image.src}
             alt={image.description}
+            data-markdown-copy={serializeMarkdownCodeFence(code, language)}
             className="block h-auto max-w-full self-start"
             style={{ width: image.width }}
             onError={() => setError("Could not display diagram. The source is available below.")}
@@ -347,7 +348,7 @@ export function MermaidDiagram({
             {...composerFloatingLayerProps}
             bottomStickOnMobile={false}
             finalFocus={expandRef}
-            className="flex h-[90dvh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0 sm:w-[92vw]"
+            className="flex h-[90dvh] w-[calc(100vw-2rem)] max-w-[92vw] flex-col overflow-hidden p-0"
           >
             <DialogTitle className="px-4 pt-4 pr-12 pb-3 text-base">
               {title ?? "Mermaid diagram"}
