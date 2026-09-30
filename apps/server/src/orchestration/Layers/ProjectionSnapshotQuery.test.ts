@@ -46,6 +46,7 @@ const encodeThreadLinkedPullRequest = Schema.encodeSync(
 const encodeMessageContext = Schema.encodeEffect(
   Schema.fromJsonString(OrchestrationMessageContext),
 );
+const encodeActivityPayload = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 it.effect("reads project shells without loading threads or resolving excluded projects", () => {
   const resolved: string[] = [];
@@ -121,7 +122,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, created_at, updated_at)
         VALUES (${threadId}, 'output-project', 'Output', '{"instanceId":"codex","model":"gpt-5-codex"}', 'full-access', 'default', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`;
         const output = "a".repeat(16_383) + "😀\nsecond line\nlast line";
-        const payload = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+        const payload = yield* encodeActivityPayload({
           itemType: "command_execution",
           data: { item: { aggregatedOutput: output } },
         });
@@ -158,6 +159,58 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         yield* sql`DELETE FROM projection_thread_activities WHERE thread_id = ${threadId}`;
         yield* sql`DELETE FROM projection_threads WHERE thread_id = ${threadId}`;
       }),
+  );
+
+  it.effect("loads saved file changes in bounded pages while leaving snapshots slim", () =>
+    Effect.gen(function* () {
+      const query = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      const threadId = ThreadId.make("edit-output-thread");
+      yield* sql`INSERT INTO projection_threads
+        (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, created_at, updated_at)
+        VALUES (${threadId}, 'edit-project', 'Edit', '{"instanceId":"codex","model":"gpt-5-codex"}', 'full-access', 'default', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`;
+      const header = "Added: /repo/AGENTS.md\n\n";
+      const contents = "a".repeat(16_383 - header.length) + "😀\npolicy\n";
+      const payload = yield* encodeActivityPayload({
+        itemType: "file_change",
+        data: {
+          item: { changes: [{ path: "/repo/AGENTS.md", kind: { type: "add" }, diff: contents }] },
+        },
+      });
+      yield* sql`INSERT INTO projection_thread_activities
+        (activity_id, thread_id, turn_id, tone, kind, summary, payload_json, sequence, created_at)
+        VALUES ('edit-output', ${threadId}, NULL, 'tool', 'tool.completed', 'File change', ${payload}, 1, '2026-09-01T00:00:00Z')`;
+      const first = yield* query.getCommandOutput({
+        threadId,
+        activityId: "edit-output",
+        offset: 0,
+      });
+      assert.equal(first.text.length, 16_383);
+      assert.equal(first.nextOffset, 16_383);
+      const second = yield* query.getCommandOutput({
+        threadId,
+        activityId: "edit-output",
+        offset: first.nextOffset!,
+      });
+      assert.equal(first.text + second.text, header + contents);
+      assert.equal(second.nextOffset, null);
+      const snapshot = yield* query.getThreadDetailSnapshot(threadId);
+      assert(Option.isSome(snapshot));
+      assert.deepStrictEqual(snapshot.value.thread.activities[0]?.payload, {
+        itemType: "file_change",
+        data: { files: [{ path: "/repo/AGENTS.md" }] },
+      });
+      const missing = yield* query
+        .getCommandOutput({
+          threadId: ThreadId.make("other-thread"),
+          activityId: "edit-output",
+          offset: 0,
+        })
+        .pipe(Effect.flip);
+      assert.equal(missing._tag, "OrchestrationGetCommandOutputError");
+      yield* sql`DELETE FROM projection_thread_activities WHERE thread_id = ${threadId}`;
+      yield* sql`DELETE FROM projection_threads WHERE thread_id = ${threadId}`;
+    }),
   );
 
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>

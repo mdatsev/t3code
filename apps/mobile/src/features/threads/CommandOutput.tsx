@@ -9,30 +9,43 @@ import { serverEnvironment } from "../../state/server";
 type CommandOutputProps = { environmentId: EnvironmentId; threadId: ThreadId; activityId: string };
 
 export function CommandOutput(
-  props: CommandOutputProps & { fallback: string; command: string; preview: string },
+  props: CommandOutputProps & {
+    fallback: string;
+    command: string;
+    preview: string;
+    fileChange?: boolean;
+  },
 ) {
   const supported = useAtomValue(
     serverEnvironment.configValueAtom(props.environmentId),
-    (config) => config?.environment.capabilities.commandOutput === true,
+    (config) =>
+      config?.environment.capabilities[props.fileChange ? "fileChangeOutput" : "commandOutput"] ===
+      true,
   );
   if (!supported)
     return (
       <Text selectable className="font-mono text-2xs text-foreground-muted">
-        {props.fallback}
+        {props.fileChange
+          ? `${props.fallback}\nEdit contents aren't available from this server.`
+          : props.fallback}
       </Text>
     );
   return (
     <View>
-      <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">
-        {props.command}
-        {"\n"}
-      </Text>
+      {props.command && (
+        <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">
+          {props.command}
+          {"\n"}
+        </Text>
+      )}
       <CommandOutputPage key={props.activityId} {...props} offset={0} />
     </View>
   );
 }
 
-function CommandOutputPage(props: CommandOutputProps & { offset: number; preview: string }) {
+function CommandOutputPage(
+  props: CommandOutputProps & { offset: number; preview: string; fileChange?: boolean },
+) {
   const query = orchestrationEnvironment.commandOutput({
     environmentId: props.environmentId,
     input: { threadId: props.threadId, activityId: props.activityId, offset: props.offset },
@@ -53,7 +66,12 @@ function CommandOutputPage(props: CommandOutputProps & { offset: number; preview
   return (
     <View>
       <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">
-        {result.value.text || (props.offset === 0 ? props.preview || "No output recorded." : "")}
+        {result.value.text ||
+          (props.offset === 0
+            ? props.fileChange
+              ? "No edit contents were recorded."
+              : props.preview || "No output recorded."
+            : "")}
       </Text>
       {result.value.nextOffset !== null &&
         (showMore ? (

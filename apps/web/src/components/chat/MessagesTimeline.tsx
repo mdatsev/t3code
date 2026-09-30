@@ -4211,6 +4211,7 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
         })
       : null;
   const canExpand =
+    workEntry.itemType === "file_change" ||
     Boolean(workEntry.questionAnswer) ||
     (showFailedIndicator && previewText.trim().length > 0) ||
     (workEntry.itemType === "mcp_tool_call" && workEntry.toolData !== undefined) ||
@@ -4364,27 +4365,31 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
       {expanded && workEntry.questionAnswer ? (
         <QuestionAnswerHistory answer={workEntry.questionAnswer} />
       ) : null}
-      {expanded && canExpand && (expandedBody || workEntry.command) && !workEntry.questionAnswer ? (
+      {expanded &&
+      canExpand &&
+      (expandedBody || workEntry.command || workEntry.itemType === "file_change") &&
+      !workEntry.questionAnswer ? (
         <div
           className="mt-1 ms-7 cursor-default rounded-md bg-muted/40 px-3 py-2"
           onClick={stopRowToggle}
           onPointerDown={stopRowToggle}
         >
           <pre className={toolCallExpandedBodyClassName}>
-            {threadRef && workEntry.command ? (
+            {threadRef && (workEntry.command || workEntry.itemType === "file_change") ? (
               <CommandOutput
                 threadRef={threadRef}
                 activityId={workEntry.sourceActivityId ?? workEntry.id}
                 fallback={expandedBody ?? ""}
                 preview={workEntry.detail ?? ""}
+                fileChange={workEntry.itemType === "file_change"}
                 command={
-                  workEntry.command.trim() === previewText.trim()
+                  !workEntry.command || workEntry.command.trim() === previewText.trim()
                     ? ""
                     : (workEntryRawCommand(workEntry) ?? workEntry.command)
                 }
               />
             ) : (
-              expandedBody
+              (expandedBody ?? "No edit contents were recorded.")
             )}
           </pre>
         </div>

@@ -10,10 +10,18 @@ export function CommandOutput(props: {
   fallback: string;
   command: string;
   preview: string;
+  fileChange?: boolean;
 }) {
   const configs = useServerConfigs();
-  if (configs.get(props.threadRef.environmentId)?.environment.capabilities.commandOutput !== true) {
-    return <>{props.fallback}</>;
+  const capability = props.fileChange ? "fileChangeOutput" : "commandOutput";
+  if (configs.get(props.threadRef.environmentId)?.environment.capabilities[capability] !== true) {
+    return (
+      <>
+        {props.fileChange
+          ? `${props.fallback}\nEdit contents aren't available from this server.`
+          : props.fallback}
+      </>
+    );
   }
   return (
     <>
@@ -28,6 +36,7 @@ function CommandOutputPage(props: {
   activityId: string;
   offset: number;
   preview: string;
+  fileChange?: boolean;
 }) {
   const query = orchestrationEnvironment.commandOutput({
     environmentId: props.threadRef.environmentId,
@@ -54,7 +63,12 @@ function CommandOutputPage(props: {
   if (result._tag !== "Success") return <span className="block">Loading output…</span>;
   return (
     <>
-      {result.value.text || (props.offset === 0 ? props.preview || "No output recorded." : "")}
+      {result.value.text ||
+        (props.offset === 0
+          ? props.fileChange
+            ? "No edit contents were recorded."
+            : props.preview || "No output recorded."
+          : "")}
       {result.value.nextOffset !== null &&
         (showMore ? (
           <CommandOutputPage {...props} offset={result.value.nextOffset} />

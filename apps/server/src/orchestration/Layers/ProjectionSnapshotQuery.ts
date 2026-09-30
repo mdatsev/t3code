@@ -37,7 +37,10 @@ import {
   ThreadPullRequestStack,
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
-import { extractCommandOutputText } from "@t3tools/shared/commandOutput";
+import {
+  extractCommandOutputText,
+  extractFileChangeOutputText,
+} from "@t3tools/shared/commandOutput";
 import { legacyLinkedPullRequestOf } from "@t3tools/shared/threadPullRequests";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
@@ -1450,10 +1453,13 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       });
     }
     const activity = mapThreadActivityRow(row.value);
+    const data = Predicate.hasProperty(activity.payload, "data") ? activity.payload.data : null;
+    // Keep the existing paginated RPC for both kinds of stored tool content.
     const output =
-      extractCommandOutputText(
-        Predicate.hasProperty(activity.payload, "data") ? activity.payload.data : null,
-      ) ?? "";
+      (Predicate.hasProperty(activity.payload, "itemType") &&
+      activity.payload.itemType === "file_change"
+        ? extractFileChangeOutputText(data)
+        : extractCommandOutputText(data)) ?? "";
     // Each activity is immutable. Page by UTF-16 offset without splitting surrogate pairs.
     let end = Math.min(input.offset + 16_384, output.length);
     const last = output.charCodeAt(end - 1);

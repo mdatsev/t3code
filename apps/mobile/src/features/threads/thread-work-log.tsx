@@ -882,7 +882,11 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
       </Pressable>
 
       {expanded &&
-      (fullDetail || row.workEntry.command || viewedImagePath || row.workEntry.questionAnswer) ? (
+      (fullDetail ||
+        row.workEntry.command ||
+        row.workEntry.itemType === "file_change" ||
+        viewedImagePath ||
+        row.workEntry.questionAnswer) ? (
         <Animated.View
           entering={WORK_LOG_DETAIL_ENTER_TRANSITION}
           exiting={WORK_LOG_DETAIL_EXIT_TRANSITION}
@@ -907,14 +911,15 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
             className="max-h-60"
             contentContainerStyle={{ paddingRight: 8 }}
           >
-            {row.workEntry.command ? (
+            {row.workEntry.command || row.workEntry.itemType === "file_change" ? (
               <CommandOutput
                 environmentId={props.environmentId}
                 threadId={props.threadId}
                 activityId={row.workEntry.sourceActivityId ?? row.workEntry.id}
                 fallback={fullDetail ?? ""}
-                command={row.workEntry.rawCommand ?? row.workEntry.command}
+                command={row.workEntry.rawCommand ?? row.workEntry.command ?? ""}
                 preview={row.workEntry.detail ?? ""}
+                fileChange={row.workEntry.itemType === "file_change"}
               />
             ) : (
               <Text selectable className="font-mono text-2xs leading-normal text-foreground-muted">

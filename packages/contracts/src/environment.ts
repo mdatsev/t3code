@@ -138,6 +138,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadPullRequests: Schema.optionalKey(Schema.Boolean),
   /** Fetch stored command output on demand, in bounded pages. */
   commandOutput: Schema.optionalKey(Schema.Boolean),
+  /** The paginated command-output RPC also serves stored file-change contents. */
+  fileChangeOutput: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),
   /** The update path clients should offer for this server. Absent on
       servers that must be relaunched manually (dev checkouts, Windows
