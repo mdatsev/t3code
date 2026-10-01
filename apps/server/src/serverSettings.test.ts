@@ -30,6 +30,7 @@ import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.t
 
 const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
+const decodeServerSettingsJson = Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings));
 
 const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -299,6 +300,27 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         yield* serverSettings.updateSettings({ usagePriceOverrides: { "example-model": null } });
         const restored = yield* readPersisted;
         assert.deepStrictEqual(restored.usagePriceOverrides, {});
+      }),
+    ).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("persists, broadcasts, and clears the browser tab title", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const changes = yield* serverSettings.subscribeChanges;
+
+        for (const browserTabTitle of ["marti@shared-box T3", ""]) {
+          const next = yield* serverSettings.updateSettings({ browserTabTitle });
+          const change = Option.getOrUndefined(yield* Stream.runHead(changes));
+          const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+          const persisted = yield* decodeServerSettingsJson(raw);
+          assert.strictEqual(next.browserTabTitle, browserTabTitle);
+          assert.strictEqual(change?.browserTabTitle, browserTabTitle);
+          assert.strictEqual(persisted.browserTabTitle, browserTabTitle);
+        }
       }),
     ).pipe(Effect.provide(makeServerSettingsLayer())),
   );

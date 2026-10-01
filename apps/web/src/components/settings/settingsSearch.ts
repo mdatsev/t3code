@@ -244,6 +244,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["notification sound alert completion input approval desktop"],
   },
   {
+    id: "browser-tab-title",
+    title: "Browser tab title",
+    to: "/settings/general",
+    scope: "environment",
+    searchTerms: ["custom name window title instance server"],
+  },
+  {
     id: "in-app-notifications",
     title: "In-app notifications",
     to: "/settings/general",

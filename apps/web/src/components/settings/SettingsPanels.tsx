@@ -2154,6 +2154,7 @@ export function GeneralSettingsPanel() {
   const activeBackgroundActivityProfile = resolvedBackgroundActivity.profile;
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
   const mixedBackgroundActivity = useScopedSettingsMixed(["backgroundActivity"]);
+  const mixedBrowserTabTitle = useScopedSettingsMixed(["browserTabTitle"]);
   const mixedAddProjectBaseDirectory = useScopedSettingsMixed(["addProjectBaseDirectory"]);
   const mixedTextGenerationModel = useScopedSettingsMixed(["textGenerationModelSelection"]);
   const backgroundActivityDescription =
@@ -2290,6 +2291,32 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="behavior" title="Behavior">
+        <SettingsRow
+          serverScoped
+          settingKeys={["browserTabTitle"]}
+          {...searchableSetting("browser-tab-title")}
+          description="Title shown when this is the primary environment. Leave empty to use the default app title."
+          resetAction={
+            settings.browserTabTitle !== "" || mixedBrowserTabTitle ? (
+              <SettingResetButton
+                label="browser tab title"
+                onClick={() => updateSettings({ browserTabTitle: "" })}
+              />
+            ) : null
+          }
+          control={
+            <DraftInput
+              size="sm"
+              className="w-full sm:w-72"
+              value={mixedBrowserTabTitle ? "" : settings.browserTabTitle}
+              onCommit={(next) => updateSettings({ browserTabTitle: next })}
+              placeholder={mixedBrowserTabTitle ? "Mixed" : "Default app title"}
+              maxLength={200}
+              spellCheck={false}
+              aria-label="Browser tab title"
+            />
+          }
+        />
         <NotificationSettings />
         <SettingsRow
           {...searchableSetting("in-app-notifications")}
