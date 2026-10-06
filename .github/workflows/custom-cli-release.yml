@@ -97,5 +97,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           tag="custom-${GITHUB_SHA}"
-          gh release create "$tag" release-cli/* --target "$GITHUB_SHA" --title "Custom CLI ${GITHUB_SHA:0:12}" --notes "Linux x64 CLI built from custom commit ${GITHUB_SHA}." --prerelease --latest=false --draft
+          if draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [[ "$draft" == false ]]; then
+              echo "Release $tag is already published."
+              exit 0
+            fi
+            gh release upload "$tag" release-cli/* --clobber
+          else
+            gh release create "$tag" release-cli/* --target "$GITHUB_SHA" --title "Custom CLI ${GITHUB_SHA:0:12}" --notes "Linux x64 CLI built from custom commit ${GITHUB_SHA}." --prerelease --latest=false --draft
+          fi
           gh release edit "$tag" --draft=false
