@@ -1,0 +1,109 @@
+name: Custom CLI release
+
+on:
+  push:
+    branches: [custom]
+  pull_request:
+    branches: [custom]
+    paths:
+      - .github/workflows/custom-cli-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-cli-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'mdatsev/t3code'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb
+        with:
+          node-version-file: package.json
+          run-install: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: stable
+      - name: Install locked dependencies with the repository build policy
+        run: vp install --frozen-lockfile --filter=t3... --filter=@t3tools/scripts...
+      - name: Set release identity
+        run: |
+          revision=$(git rev-parse HEAD)
+          version=$(node -p "require('./apps/server/package.json').version.split('-')[0]")-custom.${revision}
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "CUSTOM_REVISION=$revision" >> "$GITHUB_ENV"
+          node scripts/update-release-package-versions.ts "$version"
+      - name: Build web client and server
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          T3CODE_WEB_SOURCEMAP: "0"
+        run: |
+          (cd apps/web && vp build)
+          node apps/server/scripts/cli.ts build --verbose
+          node -e 'require("node:fs").writeFileSync("apps/server/dist/client/remote-agent-box-release.json", JSON.stringify({commit: process.env.CUSTOM_REVISION}) + "\n")'
+      - name: Build resource monitor
+        run: |
+          cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml
+          install -D native/resource-monitor/target/release/t3-resource-monitor apps/server/dist/resource-monitor/linux-x64/t3-resource-monitor
+      - name: Build single executable
+        env:
+          VP_NODE_VERSION: "26.8.2"
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+      - name: Package and verify CLI archive
+        run: |
+          node scripts/build-cli-archive.ts --platform linux --arch x64 --version "$APP_VERSION" --output-dir release-cli
+          node scripts/smoke-cli-archive.ts --archive release-cli/*.tar.gz --expect-version "$APP_VERSION"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          archive, = Path('release-cli').glob('*.tar.gz')
+          manifest = {
+              'commit': os.environ['CUSTOM_REVISION'],
+              'tag': 'custom-' + os.environ['CUSTOM_REVISION'],
+              'version': os.environ['APP_VERSION'],
+              'asset': archive.name,
+              'sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+          }
+          Path('release-cli/custom-release.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: custom-cli-linux-x64
+          path: release-cli/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/custom' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: custom-cli-linux-x64
+          path: release-cli
+      - name: Publish verified fork release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="custom-${GITHUB_SHA}"
+          if draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [[ "$draft" == false ]]; then
+              echo "Release $tag is already published."
+              exit 0
+            fi
+            gh release upload "$tag" release-cli/* --clobber
+          else
+            gh release create "$tag" release-cli/* --target "$GITHUB_SHA" --title "Custom CLI ${GITHUB_SHA:0:12}" --notes "Linux x64 CLI built from custom commit ${GITHUB_SHA}." --prerelease --latest=false --draft
+          fi
+          gh release edit "$tag" --draft=false
