@@ -107,6 +107,13 @@ returns. Leave it off if you don't want request bodies stored outside your
 machine. To skip requests that waited too long, set **Skip requests older
 than** on the task.
 
+## Browser tab title
+
+In **General → Behavior → Browser tab title**, select an environment and enter a custom title.
+The title is saved on that server and used by web and desktop clients when it is their primary
+environment. Leave it empty or reset it to restore the default app title. Choose **All projects**
+to edit it; this setting cannot be overridden by a project.
+
 ## Defaults and inheritance
 
 General contains the model and workspace for new threads. Integrations controls agent browser

@@ -1214,3 +1214,14 @@ describe("server model preferences", () => {
     });
   });
 });
+
+describe("browser tab title", () => {
+  it("defaults old settings to the app title and normalizes custom titles", () => {
+    expect(decodeServerSettings({}).browserTabTitle).toBe("");
+    expect(
+      decodeServerSettingsPatch({ browserTabTitle: "  teri@shared-box T3  " }).browserTabTitle,
+    ).toBe("teri@shared-box T3");
+    expect(decodeServerSettingsPatch({ browserTabTitle: "   " }).browserTabTitle).toBe("");
+    expect(() => decodeServerSettingsPatch({ browserTabTitle: "x".repeat(201) })).toThrow();
+  });
+});
