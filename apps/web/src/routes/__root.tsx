@@ -75,6 +75,7 @@ import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
   primaryServerConfigAtom,
   primaryServerConfigEventAtom,
+  primaryServerSettingsAtom,
   primaryServerWelcomeAtom,
 } from "../state/server";
 import { readProject, setActiveEnvironmentId, useActiveEnvironmentId } from "../state/entities";
@@ -357,6 +358,7 @@ function FontAppearanceSync() {
 }
 
 function DocumentTitleSync() {
+  const customTitle = useAtomValue(primaryServerSettingsAtom).browserTabTitle;
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
   const title = resolveServerBackedAppDisplayName({
@@ -367,8 +369,8 @@ function DocumentTitleSync() {
   });
 
   useEffect(() => {
-    document.title = title;
-  }, [title]);
+    document.title = customTitle || title;
+  }, [customTitle, title]);
 
   return null;
 }
