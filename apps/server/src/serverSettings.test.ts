@@ -646,7 +646,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           assert.strictEqual(persisted.browserTabTitle, browserTabTitle);
         }
       }),
-    ).pipe(Effect.provide(makeServerSettingsLayer())),
+    ).pipe(Effect.provide(layerServerSettings())),
   );
 
   it.effect("persists and broadcasts thread settlement settings", () =>
