@@ -209,6 +209,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   availableEditors,
   openInCwd,
   presentation = "toolbar",
+  openInTarget = "folder",
   compact = false,
   enableShortcut = true,
   displayMode = "toolbar",
@@ -218,6 +219,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   availableEditors: ReadonlyArray<EditorId>;
   openInCwd: string | null;
   presentation?: "toolbar" | "menu";
+  openInTarget?: "folder" | "file";
   compact?: boolean;
   enableShortcut?: boolean;
   displayMode?: "toolbar" | "panel";
@@ -239,8 +241,12 @@ export const OpenInPicker = memo(function OpenInPicker({
   const effectiveEditors = remote.mode === "local-exec" ? availableEditors : remoteCapableEditors;
   const [preferredEditor, setPreferredEditor] = usePreferredEditor(effectiveEditors);
   const options = useMemo(
-    () => resolveOpenInOptions(navigator.platform, effectiveEditors),
-    [effectiveEditors],
+    () =>
+      resolveOpenInOptions(navigator.platform, effectiveEditors).map((option) => ({
+        ...option,
+        label: remote.mode === "browser-editor" ? "VS Code (browser)" : option.label,
+      })),
+    [effectiveEditors, remote.mode],
   );
   const primaryOption = options.find(({ value }) => value === preferredEditor) ?? null;
 
@@ -249,6 +255,15 @@ export const OpenInPicker = memo(function OpenInPicker({
       if (!openInCwd) return;
       const editor = editorId ?? preferredEditor;
       if (!editor) return;
+      if (remote.mode === "browser-editor") {
+        const url = new URL(remote.baseUrl);
+        url.searchParams.delete("folder");
+        url.searchParams.delete("file");
+        url.searchParams.set(openInTarget, openInCwd);
+        window.open(url.href, "_blank", "noopener,noreferrer");
+        setPreferredEditor(editor);
+        return;
+      }
       if (remote.mode === "remote-unavailable") return;
       if (remote.mode === "remote-links") {
         const url = buildRemoteOpenUrl({
@@ -281,6 +296,7 @@ export const OpenInPicker = memo(function OpenInPicker({
       environmentId,
       markRemoteHintSeen,
       openInCwd,
+      openInTarget,
       openInEditorMutation,
       preferredEditor,
       remote,
