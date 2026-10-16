@@ -31,6 +31,7 @@ export interface RemoteOpenHost {
 
 export type RemoteOpenState =
   | { readonly mode: "local-exec" }
+  | { readonly mode: "browser-editor"; readonly baseUrl: string }
   | { readonly mode: "remote-links"; readonly host: RemoteOpenHost }
   | { readonly mode: "remote-unavailable" };
 
@@ -102,6 +103,21 @@ export function useRemoteOpenResolution(environmentId: EnvironmentId | null): Re
   return useMemo(() => {
     if (presentation === null) {
       return UNRESOLVED_REMOTE_OPEN;
+    }
+    const browserEditorUrl = import.meta.env.VITE_BROWSER_VSCODE_URL;
+    const target = presentation.entry.target;
+    // This build's editor belongs only to the server serving this page, never
+    // to another saved environment or a desktop app's local backend.
+    if (
+      browserEditorUrl &&
+      window.desktopBridge === undefined &&
+      target._tag === "PrimaryConnectionTarget" &&
+      new URL(target.httpBaseUrl).origin === window.location.origin
+    ) {
+      return {
+        state: { mode: "browser-editor", baseUrl: browserEditorUrl },
+        isResolved: true,
+      };
     }
     const profile = Option.getOrNull(presentation.entry.profile);
     const sshAlias =
