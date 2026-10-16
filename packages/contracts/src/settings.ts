@@ -817,6 +817,16 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
+export const VoiceInputSettings = Schema.Struct({
+  apiKey: TrimmedString.check(Schema.isMaxLength(512)).pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  language: TrimmedString.check(Schema.isPattern(/^(?:[a-z]{2,3})?$/)).pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+  ),
+});
+
 /**
  * A read-only quota source outside this environment's provider CLIs. The
  * only kind today is a CLIProxyAPI hub, whose management API reports the
@@ -1235,6 +1245,9 @@ export const ServerSettings = Schema.Struct({
   backgroundActivityProfile: BackgroundActivityProfile.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BACKGROUND_ACTIVITY_PROFILE)),
   ),
+  voiceInput: VoiceInputSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed({ apiKey: "", language: "" })),
+  ),
   browserTabTitle: TrimmedString.check(Schema.isMaxLength(200)).pipe(
     Schema.withDecodingDefault(Effect.succeed("")),
   ),
@@ -1612,6 +1625,7 @@ export const ServerSettingsPatch = Schema.Struct({
   automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
   providerHealthRefreshInterval: Schema.optionalKey(Schema.DurationFromMillis),
   backgroundActivityProfile: Schema.optionalKey(BackgroundActivityProfile),
+  voiceInput: Schema.optionalKey(VoiceInputSettings),
   browserTabTitle: Schema.optionalKey(TrimmedString.check(Schema.isMaxLength(200))),
   environmentIcon: Schema.optionalKey(Schema.NullOr(EnvironmentMachineKind)),
   defaultThreadEnvMode: Schema.optionalKey(Schema.NullOr(ThreadEnvMode)),

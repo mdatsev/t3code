@@ -393,6 +393,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["notification sound alert completion input approval desktop"],
   },
   {
+    id: "voice-input",
+    title: "Voice input",
+    to: "/settings/general",
+    scope: "environment",
+    searchTerms: ["microphone dictation speech transcription elevenlabs scribe language api key"],
+  },
+  {
     id: "browser-tab-title",
     title: "Browser tab title",
     to: "/settings/general",

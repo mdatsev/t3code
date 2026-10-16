@@ -30,9 +30,13 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as AuthHttp from "./http.ts";
+import * as VoiceHttp from "../voice/http.ts";
+import * as VoiceTranscription from "../voice/VoiceTranscription.ts";
 
 const DEV_TOKEN = "reusable-dev-auth-token-that-is-long-enough";
-class AuthTestApi extends HttpApi.make("environment").add(EnvironmentHttpApi.groups.auth) {}
+class AuthTestApi extends HttpApi.make("environment")
+  .add(EnvironmentHttpApi.groups.auth)
+  .add(EnvironmentHttpApi.groups.voice) {}
 
 const layerConfig = Layer.effect(
   ServerConfig.ServerConfig,
@@ -55,6 +59,15 @@ const layerEnvironmentAuth = EnvironmentAuth.layer.pipe(
 );
 const layerRoutes = HttpApiBuilder.layer(AuthTestApi).pipe(
   Layer.provide(AuthHttp.layer),
+  Layer.provide(
+    VoiceHttp.layer.pipe(
+      Layer.provide(
+        Layer.succeed(VoiceTranscription.VoiceTranscription, {
+          transcribe: () => Effect.succeed("Transcribed draft"),
+        }),
+      ),
+    ),
+  ),
   Layer.provide(AuthHttp.layerAuthenticatedAuth),
   Layer.provideMerge(layerEnvironmentAuth),
   Layer.provide(layerConfig),
@@ -127,6 +140,24 @@ it.effect("sets the selected browser session cookies through the HTTP route", ()
             expect.stringMatching(/^t3_session_[^=]*=;.*Max-Age=0/),
           );
           const devCookieHeader = devCookie?.split(";", 1)[0] ?? "";
+          const recording = {
+            audio: Buffer.from("audio").toString("base64"),
+            mimeType: "audio/webm",
+          };
+          const anonymousVoice = await environmentA.handler(
+            postJson("/api/voice/transcribe", recording),
+            requestContext,
+          );
+          expect(anonymousVoice.status).toBe(401);
+          const authorizedVoice = await environmentA.handler(
+            postJson("/api/voice/transcribe", recording, { cookie: devCookieHeader }),
+            requestContext,
+          );
+          expect(authorizedVoice.status).toBe(200);
+          expect(await authorizedVoice.json()).toEqual({
+            status: "transcribed",
+            text: "Transcribed draft",
+          });
           const environmentBSession = await environmentB.handler(
             new Request("http://127.0.0.1/api/auth/session", {
               headers: { cookie: devCookieHeader },
@@ -155,6 +186,13 @@ it.effect("sets the selected browser session cookies through the HTTP route", ()
           expect(restrictedCookies).toHaveLength(1);
           expect(restrictedCookies[0]).toMatch(/^t3_session_/);
           expect(restrictedCookies[0]).not.toContain("t3_dev_session_");
+          const restrictedVoice = await environmentA.handler(
+            postJson("/api/voice/transcribe", recording, {
+              cookie: restrictedCookies[0]!.split(";", 1)[0]!,
+            }),
+            requestContext,
+          );
+          expect(restrictedVoice.status).toBe(403);
         }),
       ([environmentA, environmentB]) =>
         Effect.promise(() => Promise.all([environmentA.dispose(), environmentB.dispose()])),
