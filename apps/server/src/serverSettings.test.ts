@@ -628,6 +628,35 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     ).pipe(Effect.provide(layerServerSettings())),
   );
 
+  it.effect(
+    "keeps the ElevenLabs key in the secret store and preserves it when changing language",
+    () =>
+      Effect.gen(function* () {
+        const settings = yield* ServerSettingsModule.ServerSettingsService;
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const saved = yield* settings.updateSettings({
+          voiceInput: { apiKey: "eleven-test-secret", language: "" },
+        });
+        const redacted = ServerSettingsModule.redactServerSettingsForClient(saved);
+        assert.notStrictEqual(redacted.voiceInput.apiKey, "eleven-test-secret");
+        assert.isTrue(redacted.voiceInput.apiKey.length > 0);
+        assert.isFalse(
+          (yield* fs.readFileString(config.settingsPath)).includes("eleven-test-secret"),
+        );
+        assert.isTrue(Option.isSome(yield* secrets.get("voice-input-apiKey")));
+        const updated = yield* settings.updateSettings({
+          voiceInput: { ...redacted.voiceInput, language: "bg" },
+        });
+        assert.strictEqual(updated.voiceInput.apiKey, "eleven-test-secret");
+        assert.strictEqual(updated.voiceInput.language, "bg");
+        yield* settings.updateSettings({ voiceInput: { apiKey: "", language: "bg" } });
+        assert.isTrue(Option.isNone(yield* secrets.get("voice-input-apiKey")));
+        assert.strictEqual((yield* settings.getSettings).voiceInput.apiKey, "");
+      }).pipe(Effect.provide(layerServerSettingsWithSecrets())),
+  );
+
   it.effect("persists, broadcasts, and clears the browser tab title", () =>
     Effect.scoped(
       Effect.gen(function* () {

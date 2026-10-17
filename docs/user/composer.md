@@ -167,6 +167,23 @@ Stashes containing uploaded files must be restored in their original environment
 Those files are retained for 24 hours. After an upload expires, restore the prompt
 and use **Attach again** or remove the missing file before sending.
 
+## Voice input in the web composer
+
+In **Settings → General → Voice input**, select one environment and add an
+ElevenLabs API key. Leave the language empty for automatic detection, or enter
+a language code such as `en` or `bg`. Each environment has its own configuration.
+
+Allow microphone access, record your message, then stop to transcribe. Review
+and edit the inserted text before sending. Recordings stop after five minutes.
+Your browser needs microphone support and a secure connection (HTTPS or localhost).
+
+Audio passes through the selected environment to ElevenLabs after recording stops.
+T3 Code does not save the audio to disk; ElevenLabs processes it under its own data
+policies. Canceling discards the result, though an already submitted request may
+still incur a charge. Leaving the composer or putting the page in the background
+while recording cancels it. If you edit the draft while voice input is running,
+the transcript is discarded to preserve your edits.
+
 ## Voice input on iPhone
 
 On supported iPhones with iOS 26 or later, use the composer's microphone to record,

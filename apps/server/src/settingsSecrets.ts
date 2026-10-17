@@ -4,6 +4,7 @@ import {
   CodexSettings,
   type ServerSettings,
   UsageLimitSourceConfig,
+  VoiceInputSettings,
   secretSettingsFields,
 } from "@t3tools/contracts";
 import { acpRegistryClient } from "@t3tools/provider-acp-registry/client";
@@ -146,5 +147,10 @@ export function mapSettingsSecrets(
     ]),
   ) as ServerSettings["usageLimitSources"];
 
-  return { ...settings, providerInstances, sourceControlHosts, usageLimitSources };
+  const voiceInput = mapFields(
+    settings.voiceInput,
+    secretSettingsFields(VoiceInputSettings),
+    (field) => `voice-input-${field}`,
+  ) as ServerSettings["voiceInput"];
+  return { ...settings, voiceInput, providerInstances, sourceControlHosts, usageLimitSources };
 }

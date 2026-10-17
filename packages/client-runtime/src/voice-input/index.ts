@@ -18,3 +18,5 @@ export {
   type VoiceTranscriptionErrorCode,
   type VoiceTranscriptionOptions,
 } from "./transcription.ts";
+
+export { createVoiceTranscriptionCommand } from "./command.ts";

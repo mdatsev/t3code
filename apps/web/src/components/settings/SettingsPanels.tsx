@@ -1,3 +1,4 @@
+import { VoiceInputSettings } from "./VoiceInputSettings";
 import { SettingsGroup } from "./SettingsGroup";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
@@ -2517,6 +2518,7 @@ export function GeneralSettingsPanel() {
         ) : null}
       </SettingsSection>
 
+      <VoiceInputSettings key={scope.environmentIds.join(",")} />
       <SettingsSection id="behavior" title="Behavior">
         <SettingsRow
           serverScoped

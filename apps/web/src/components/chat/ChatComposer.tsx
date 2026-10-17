@@ -1,3 +1,4 @@
+import { VoiceInputControl } from "../../voice-input/VoiceInputControl";
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
@@ -1897,6 +1898,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   attachmentTargetKeyRef.current = attachmentTargetKey;
   const questionPreparations = useQuestionAttachmentPreparation((state) => state.counts);
   const prompt = composerDraft.prompt;
+  const [voiceInputBusy, setVoiceInputBusy] = useState(false);
+  const voiceDraftRevision = useRef(0);
   const composerImages = attachmentDraft.images;
   const composerFiles = attachmentDraft.files;
   // A question answer has no chips: its files live in the question draft and show in the
@@ -3752,6 +3755,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     cursorAdjacentToMention: boolean,
     contextIds: string[],
   ) => {
+    voiceDraftRevision.current += 1;
     expandComposerForEditorChange();
     if (activePendingProgress?.activeQuestion && pendingUserInputs.length > 0) {
       if (activePendingProgress.activeQuestion.allowCustomAnswer === false) return;
@@ -4185,6 +4189,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     submissionIntent?: ComposerSubmissionIntent,
   ) => {
     if (
+      voiceInputBusy ||
       noProviderAvailable ||
       isSendDisabled ||
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
@@ -6805,7 +6810,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               showPlanFollowUpPrompt={false}
                               promptHasText={false}
                               isSendBusy={isSendBusy}
-                              sendDisabledReason={sendDisabledReason}
+                              sendDisabledReason={
+                                voiceInputBusy
+                                  ? "Finish or cancel voice input first."
+                                  : sendDisabledReason
+                              }
                               isConnecting={isConnecting}
                               isEnvironmentUnavailable={
                                 environmentUnavailable !== null ||
@@ -7496,7 +7505,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       showPlanFollowUpPrompt={false}
                       promptHasText={false}
                       isSendBusy={isSendBusy}
-                      sendDisabledReason={sendDisabledReason}
+                      sendDisabledReason={
+                        voiceInputBusy ? "Finish or cancel voice input first." : sendDisabledReason
+                      }
                       isConnecting={isConnecting}
                       isEnvironmentUnavailable={
                         environmentUnavailable !== null ||
@@ -7594,6 +7605,39 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       </Tooltip>
                     </>
                   ) : null}
+                  {!activePendingUserInput && !isComposerApprovalState && (
+                    <VoiceInputControl
+                      key={`${environmentId}:${composerDraftTargetKey}`}
+                      environmentId={environmentId}
+                      ownerKey={composerDraftTargetKey}
+                      disabled={
+                        !canOperateThread ||
+                        isSendBusy ||
+                        isConnecting ||
+                        environmentUnavailable !== null
+                      }
+                      readDraft={() => {
+                        if (composerDraftTargetKeyRef.current !== composerDraftTargetKey)
+                          return null;
+                        const snapshot = readComposerSnapshotStable();
+                        return {
+                          ownerKey: composerDraftTargetKey,
+                          text: snapshot.value,
+                          selection: {
+                            start: snapshot.expandedCursor,
+                            end: snapshot.expandedCursor,
+                          },
+                          revision: voiceDraftRevision.current,
+                        };
+                      }}
+                      commitDraft={(text, selection) => {
+                        applyPromptReplacementStable(0, promptRef.current.length, text, {
+                          expandedCursorAfterReplace: selection.end,
+                        });
+                      }}
+                      onBusyChange={setVoiceInputBusy}
+                    />
+                  )}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
@@ -7622,7 +7666,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     }
                     promptHasText={prompt.trim().length > 0}
                     isSendBusy={isSendBusy}
-                    sendDisabledReason={sendDisabledReason}
+                    sendDisabledReason={
+                      voiceInputBusy ? "Finish or cancel voice input first." : sendDisabledReason
+                    }
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
                       environmentUnavailable !== null ||
