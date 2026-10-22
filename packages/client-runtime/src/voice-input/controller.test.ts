@@ -186,7 +186,7 @@ describe("VoiceInputController", () => {
       expect(harness.controller.currentState).toMatchObject({
         phase: "error",
         error: expect.any(String),
-        errorAction: failure === "permission" ? "settings" : "retry",
+        errorAction: failure === "permission" ? "settings" : "retry-transcription",
       });
 
       harness.setDraft(draft({ ownerKey: "environment:other-thread" }));

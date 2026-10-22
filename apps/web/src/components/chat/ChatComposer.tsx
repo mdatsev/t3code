@@ -1,4 +1,5 @@
 import { VoiceInputControl } from "../../voice-input/VoiceInputControl";
+import type { VoiceInputController } from "@t3tools/client-runtime/voice-input";
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
@@ -1900,6 +1901,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const prompt = composerDraft.prompt;
   const [voiceInputBusy, setVoiceInputBusy] = useState(false);
   const voiceDraftRevision = useRef(0);
+  const voiceInputControllerRef = useRef<VoiceInputController | null>(null);
+  const [voiceSubmissionPending, setVoiceSubmissionPending] = useState(false);
   const composerImages = attachmentDraft.images;
   const composerFiles = attachmentDraft.files;
   // A question answer has no chips: its files live in the question draft and show in the
@@ -2510,7 +2513,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     active: false,
   });
   const isComposerCollapsedMobile =
-    isMobileViewport && !forceExpandedOnMobile && !isComposerFocused && !hasMultilinePrompt;
+    isMobileViewport &&
+    !forceExpandedOnMobile &&
+    !isComposerFocused &&
+    !hasMultilinePrompt &&
+    !voiceInputBusy;
 
   // ------------------------------------------------------------------
   // Refs
@@ -4183,13 +4190,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return showPlanFollowUpPrompt || composerSendState.hasSendableContent;
   };
 
-  const submitComposer = (
+  const submitComposerNow = (
     event?: { preventDefault: () => void },
     dispatchMode?: ComposerDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
   ) => {
     if (
-      voiceInputBusy ||
       noProviderAvailable ||
       isSendDisabled ||
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
@@ -4248,6 +4254,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (shouldBlurMobileComposerOnSubmit()) {
       blurMobileComposerAfterSend();
     }
+  };
+  const submitComposerNowStable = useStableCallback(submitComposerNow);
+  const submitComposer = (
+    event?: { preventDefault: () => void },
+    dispatchMode?: ComposerDispatchMode,
+    submissionIntent?: ComposerSubmissionIntent,
+  ) => {
+    const voiceInputController = voiceInputControllerRef.current;
+    if (!voiceInputController?.hasPendingInput) {
+      submitComposerNow(event, dispatchMode, submissionIntent);
+      return;
+    }
+    event?.preventDefault();
+    if (voiceSubmissionPending) return;
+    setVoiceSubmissionPending(true);
+    void voiceInputController.finish().then((finished) => {
+      flushSync(() => setVoiceSubmissionPending(false));
+      if (finished) submitComposerNowStable(undefined, dispatchMode, submissionIntent);
+    });
   };
   const submitComposerStable = useStableCallback(submitComposer);
   const handleSubmitMessage = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -7636,6 +7661,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         });
                       }}
                       onBusyChange={setVoiceInputBusy}
+                      controllerRef={voiceInputControllerRef}
                     />
                   )}
                   <ComposerFooterPrimaryActions
@@ -7665,10 +7691,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }
                     promptHasText={prompt.trim().length > 0}
-                    isSendBusy={isSendBusy}
-                    sendDisabledReason={
-                      voiceInputBusy ? "Finish or cancel voice input first." : sendDisabledReason
-                    }
+                    isSendBusy={isSendBusy || voiceSubmissionPending}
+                    sendDisabledReason={sendDisabledReason}
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
                       environmentUnavailable !== null ||
@@ -7676,7 +7700,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       projectSelectionRequired
                     }
                     isPreparingWorktree={isPreparingWorktree}
-                    hasSendableContent={composerSendState.hasSendableContent}
+                    hasSendableContent={composerSendState.hasSendableContent || voiceInputBusy}
                     canResume={showResumeAction}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
                     isEditingQueuedMessage={isEditingQueuedMessage}
