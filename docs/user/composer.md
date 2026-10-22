@@ -173,9 +173,15 @@ In **Settings → General → Voice input**, select one environment and add an
 ElevenLabs API key. Leave the language empty for automatic detection, or enter
 a language code such as `en` or `bg`. Each environment has its own configuration.
 
-Allow microphone access, record your message, then stop to transcribe. Review
-and edit the inserted text before sending. Recordings stop after five minutes.
-Your browser needs microphone support and a secure connection (HTTPS or localhost).
+Allow microphone access, record your message, then stop to transcribe and review
+the inserted text, or press Send to transcribe and send in one step. Recordings
+stop after five minutes. Your browser needs microphone support and a secure
+connection (HTTPS or localhost).
+
+When a Bluetooth headset or car hands-free microphone is connected, voice input
+uses the device's built-in microphone where the browser reports it. The microphone
+in use is named while recording, and a warning appears if it stays silent. If
+transcription fails, the recording is kept so you can retry or discard it.
 
 Audio passes through the selected environment to ElevenLabs after recording stops.
 T3 Code does not save the audio to disk; ElevenLabs processes it under its own data

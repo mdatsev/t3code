@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { MicIcon, SquareIcon, XIcon } from "lucide-react";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -32,6 +32,7 @@ type VoiceInputControlProps = {
   readDraft: () => VoiceDraftSnapshot | null;
   commitDraft: (text: string, selection: { start: number; end: number }) => void;
   onBusyChange: (busy: boolean) => void;
+  controllerRef: RefObject<VoiceInputController | null>;
 };
 
 export function VoiceInputControl(props: VoiceInputControlProps) {
@@ -66,6 +67,8 @@ function VoiceInputSession(
   });
   const [failure, setFailure] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [microphone, setMicrophone] = useState<string | null>(null);
+  const [microphoneProblem, setMicrophoneProblem] = useState<string | null>(null);
   const controllerRef = useRef<VoiceInputController | null>(null);
   const readDraft = useStableCallback(props.readDraft);
   const commitDraft = useStableCallback(props.commitDraft);
@@ -77,9 +80,19 @@ function VoiceInputSession(
 
   useEffect(() => {
     if (!supported) return;
-    const recorder = new BrowserVoiceRecorder((status) => {
-      void controller.handleRecorderStatus(status);
-    });
+    const recorder = new BrowserVoiceRecorder(
+      (status) => {
+        void controller.handleRecorderStatus(status);
+      },
+      {
+        onMicrophone: (label) => {
+          if (mounted) setMicrophone(label);
+        },
+        onProblem: (problem) => {
+          if (mounted) setMicrophoneProblem(problem);
+        },
+      },
+    );
     let mounted = true;
     const controller = new VoiceInputController({
       recorder,
@@ -151,11 +164,14 @@ function VoiceInputSession(
         if (next.phase === "idle" || next.phase === "error") recorder.releaseMicrophone();
         if (!mounted) return;
         if (next.phase === "recording") setElapsed(0);
+        if (next.phase === "idle") setMicrophoneProblem(null);
         setState(next);
         onBusyChange(voiceInputBlocksSubmission(next));
       },
     });
     controllerRef.current = controller;
+    const sharedControllerRef = props.controllerRef;
+    sharedControllerRef.current = controller;
     const background = () => {
       if (document.hidden) void controller.appMovedToBackground();
     };
@@ -165,12 +181,14 @@ function VoiceInputSession(
       controller.dispose();
       recorder.releaseMicrophone();
       controllerRef.current = null;
+      if (sharedControllerRef.current === controller) sharedControllerRef.current = null;
       onBusyChange(false);
       document.removeEventListener("visibilitychange", background);
     };
   }, [
     supported,
     props.environmentId,
+    props.controllerRef,
     configured,
     language,
     readDraft,
@@ -206,6 +224,7 @@ function VoiceInputSession(
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => {
             setFailure(null);
+            setMicrophoneProblem(null);
             void controllerRef.current?.start();
           }}
         >
@@ -223,6 +242,14 @@ function VoiceInputSession(
         >
           <SquareIcon /> Stop · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
         </Button>
+      )}
+      {state.phase === "recording" && microphoneProblem && (
+        <span role="alert" className="text-xs text-destructive">
+          {microphoneProblem}
+        </span>
+      )}
+      {state.phase === "recording" && microphone && (
+        <span className="max-w-28 truncate text-xs text-muted-foreground">{microphone}</span>
       )}
       {(state.phase === "preparing" || state.phase === "transcribing") && (
         <span role="status" className="text-xs text-muted-foreground">
@@ -242,7 +269,20 @@ function VoiceInputSession(
       )}
       {state.error && (
         <span role="alert" className="text-xs text-destructive">
-          {failure ?? state.error}{" "}
+          {failure ?? microphoneProblem ?? state.error}{" "}
+          {state.errorAction === "retry-transcription" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setFailure(null);
+                void controllerRef.current?.retryTranscription();
+              }}
+            >
+              Retry
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -252,7 +292,7 @@ function VoiceInputSession(
               controllerRef.current?.cancel();
             }}
           >
-            Dismiss
+            {state.errorAction === "retry-transcription" ? "Discard" : "Dismiss"}
           </Button>
         </span>
       )}

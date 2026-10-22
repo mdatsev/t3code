@@ -9,7 +9,7 @@ export type VoiceInputPhase = "idle" | "preparing" | "recording" | "transcribing
 export type VoiceInputState = {
   readonly phase: VoiceInputPhase;
   readonly error: string | null;
-  readonly errorAction: "retry" | "settings" | null;
+  readonly errorAction: "retry" | "retry-transcription" | "settings" | null;
 };
 
 export function voiceInputBlocksSubmission(state: VoiceInputState): boolean {
@@ -198,6 +198,7 @@ export class VoiceInputController {
   private readonly ownedRecordingUris = new Set<string>();
   private recordingConfigured = false;
   private finishing = false;
+  private finishingOperation: Promise<void> | null = null;
 
   constructor(dependencies: VoiceInputControllerDependencies) {
     this.dependencies = dependencies;
@@ -209,6 +210,7 @@ export class VoiceInputController {
 
   async start(): Promise<void> {
     if (this.state.phase !== "idle" && this.state.phase !== "error") return;
+    if (this.hasRetainedRecording) await this.releaseResources();
     const initiatingDraft = this.dependencies.readDraft();
     if (!initiatingDraft) {
       this.setError("This draft is no longer available.", "retry");
@@ -294,16 +296,46 @@ export class VoiceInputController {
 
   stop(): Promise<void> {
     if (this.state.phase !== "recording") return Promise.resolve();
-    return this.finishRecording(false, null);
+    return this.trackFinishing(this.finishRecording(false, null));
+  }
+
+  get hasPendingInput(): boolean {
+    return voiceInputBlocksSubmission(this.state) || this.hasRetainedRecording;
+  }
+
+  async finish(): Promise<boolean> {
+    if (this.state.phase === "preparing") {
+      this.cancel();
+      return true;
+    }
+    const operationToken = this.operationToken;
+    if (this.state.phase === "recording") {
+      await this.stop();
+    } else if (this.state.phase === "transcribing") {
+      await this.finishingOperation;
+    } else if (this.hasRetainedRecording) {
+      await this.retryTranscription();
+    } else {
+      return true;
+    }
+    return this.isCurrent(operationToken) && this.state.phase === "idle";
+  }
+
+  retryTranscription(): Promise<void> {
+    if (!this.hasRetainedRecording) return Promise.resolve();
+    return this.trackFinishing(this.transcribeRecording());
   }
 
   cancel(): void {
     switch (this.state.phase) {
       case "idle":
         return;
-      case "error":
+      case "error": {
+        const retained = this.hasRetainedRecording;
         this.setState(IDLE_STATE);
+        if (retained) void this.releaseResources();
         return;
+      }
       case "preparing":
         this.invalidateOperation();
         this.setState(IDLE_STATE);
@@ -349,7 +381,7 @@ export class VoiceInputController {
       if (!status.url) {
         return this.interruptRecording();
       }
-      return this.finishRecording(true, status.url);
+      return this.trackFinishing(this.finishRecording(true, status.url));
     }
   }
 
@@ -363,10 +395,26 @@ export class VoiceInputController {
       this.discardRecording(null);
       return;
     }
+    if (this.hasRetainedRecording) {
+      this.cancel();
+      return;
+    }
     if (this.state.phase === "preparing" || this.state.phase === "transcribing") {
       this.invalidateOperation();
       this.setState(IDLE_STATE);
     }
+  }
+
+  private get hasRetainedRecording(): boolean {
+    return this.state.phase === "error" && this.state.errorAction === "retry-transcription";
+  }
+
+  private trackFinishing(operation: Promise<void>): Promise<void> {
+    this.finishingOperation = operation;
+    void operation.finally(() => {
+      if (this.finishingOperation === operation) this.finishingOperation = null;
+    });
+    return operation;
   }
 
   private async finishRecording(
@@ -383,7 +431,32 @@ export class VoiceInputController {
       await this.releaseAudioSession();
       this.recordingUri = completedUri ?? this.dependencies.recorder.uri ?? this.recordingUri;
       this.rememberRecordingUri(this.recordingUri);
-      if (!this.isCurrent(operationToken)) return;
+    } catch {
+      if (this.isCurrent(operationToken)) {
+        this.setError("Could not finish voice recording.", "retry");
+      }
+      this.finishing = false;
+      await this.releaseResources();
+      return;
+    }
+    this.finishing = false;
+    if (!this.isCurrent(operationToken)) {
+      await this.releaseResources();
+      return;
+    }
+    await this.transcribeRecording();
+  }
+
+  private async transcribeRecording(): Promise<void> {
+    if (this.finishing) return;
+    this.finishing = true;
+    const operationToken = this.operationToken;
+    if (this.state.phase !== "transcribing") {
+      this.setState({ phase: "transcribing", error: null, errorAction: null });
+    }
+    let retainRecording = false;
+
+    try {
       if (
         !this.recordingUri ||
         !this.transcription ||
@@ -405,7 +478,8 @@ export class VoiceInputController {
         );
       } catch (error) {
         if (this.isCurrent(operationToken)) {
-          this.setError(transcriptionErrorMessage(error), "retry");
+          retainRecording = true;
+          this.setError(transcriptionErrorMessage(error), "retry-transcription");
         }
         return;
       }
@@ -437,7 +511,7 @@ export class VoiceInputController {
       }
     } finally {
       this.finishing = false;
-      await this.releaseResources();
+      if (!retainRecording) await this.releaseResources();
     }
   }
 
