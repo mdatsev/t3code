@@ -184,8 +184,12 @@ in use is named while recording, and a warning appears if it stays silent. If
 transcription fails, the recording is kept so you can retry or discard it.
 
 Audio passes through the selected environment to ElevenLabs after recording stops.
-T3 Code does not save the audio to disk; ElevenLabs processes it under its own data
-policies. Canceling discards the result, though an already submitted request may
+ElevenLabs processes it under its own data policies. T3 Code does not save the audio
+unless the server runs with `T3CODE_VOICE_RECORDINGS=true`. Then each recording that
+was sent for transcription is kept in `userdata/voice-recordings/` in the T3 home,
+as the original audio file plus a JSON file with every transcription attempt
+(including failed and empty ones) and the text you eventually sent. The files
+stay on that machine until you delete them. Canceling discards the result, though an already submitted request may
 still incur a charge. Leaving the composer or putting the page in the background
 while recording cancels it. If you edit the draft while voice input is running,
 the transcript is discarded to preserve your edits.

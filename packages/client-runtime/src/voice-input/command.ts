@@ -1,4 +1,4 @@
-import type { VoiceTranscriptionInput } from "@t3tools/contracts";
+import type { VoiceRecordingOutcomeInput, VoiceTranscriptionInput } from "@t3tools/contracts";
 import { createEnvironmentCommand } from "../state/runtime.ts";
 import { executeAuthenticatedEnvironmentHttpRequest } from "../state/environmentHttpAuth.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
@@ -49,6 +49,36 @@ export function createVoiceTranscriptionCommand<R, E>(
             }),
           ),
         );
+      }),
+  });
+}
+
+export function createVoiceRecordingOutcomeCommand<R, E>(
+  runtime: Atom.AtomRuntime<EnvironmentRegistry | HttpClient.HttpClient | R, E>,
+) {
+  return createEnvironmentCommand(runtime, {
+    label: "environment-data:voice:recording-outcome",
+    execute: (input: VoiceRecordingOutcomeInput) =>
+      Effect.gen(function* () {
+        const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+        const prepared = yield* SubscriptionRef.get(supervisor.prepared);
+        if (Option.isNone(prepared))
+          return yield* new EnvironmentRpcUnavailableError({
+            environmentId: supervisor.target.environmentId,
+            message: "The environment is not connected.",
+          });
+        return yield* executeAuthenticatedEnvironmentHttpRequest({
+          prepared: prepared.value,
+          signer: yield* Effect.serviceOption(ManagedRelayDpopSigner.ManagedRelayDpopSigner),
+          remoteAuthorization: yield* Effect.serviceOption(
+            RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization,
+          ),
+          group: "voice",
+          method: "POST",
+          url: (urls) => urls.recordingOutcome(),
+          timeoutMs: 30_000,
+          request: ({ client, headers }) => client.recordingOutcome({ payload: input, headers }),
+        });
       }),
   });
 }

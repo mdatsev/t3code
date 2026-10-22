@@ -64,6 +64,7 @@ const layerRoutes = HttpApiBuilder.layer(AuthTestApi).pipe(
       Layer.provide(
         Layer.succeed(VoiceTranscription.VoiceTranscription, {
           transcribe: () => Effect.succeed("Transcribed draft"),
+          recordOutcome: () => Effect.void,
         }),
       ),
     ),

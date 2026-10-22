@@ -9,18 +9,26 @@ export const layer = HttpApiBuilder.group(
   "voice",
   Effect.fnUntraced(function* (handlers) {
     const voice = yield* VoiceTranscription.VoiceTranscription;
-    return handlers.handle(
-      "transcribe",
-      Effect.fnUntraced(function* ({ payload }) {
-        yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
-        return yield* voice.transcribe(payload).pipe(
-          Effect.map((text) => ({ status: "transcribed" as const, text })),
-          Effect.catchTags({
-            VoiceTranscriptionError: ({ reason }) =>
-              Effect.succeed({ status: "failed" as const, reason }),
-          }),
-        );
-      }),
-    );
+    return handlers
+      .handle(
+        "transcribe",
+        Effect.fnUntraced(function* ({ payload }) {
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          return yield* voice.transcribe(payload).pipe(
+            Effect.map((text) => ({ status: "transcribed" as const, text })),
+            Effect.catchTags({
+              VoiceTranscriptionError: ({ reason }) =>
+                Effect.succeed({ status: "failed" as const, reason }),
+            }),
+          );
+        }),
+      )
+      .handle(
+        "recordingOutcome",
+        Effect.fnUntraced(function* ({ payload }) {
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          yield* voice.recordOutcome(payload);
+        }),
+      );
   }),
 );

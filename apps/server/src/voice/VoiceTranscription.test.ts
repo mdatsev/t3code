@@ -5,6 +5,11 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Schema from "effect/Schema";
 import { VoiceTranscriptionInput, MAX_VOICE_RECORDING_BYTES } from "@t3tools/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import { ServerConfig } from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VoiceTranscription from "./VoiceTranscription.ts";
 
@@ -13,7 +18,13 @@ const input = {
   mimeType: "audio/webm" as const,
 };
 const decodeInput = Schema.decodeUnknownSync(VoiceTranscriptionInput);
-function harness(status: number, body: unknown, apiKey: string, language: string) {
+function harness(
+  status: number,
+  body: unknown,
+  apiKey: string,
+  language: string,
+  archive: { readonly baseDir: string; readonly enabled: boolean } | null = null,
+) {
   const requests: Array<{ url: string; key: string | undefined; form: FormData }> = [];
   const http = HttpClient.make((request) => {
     if (request.body._tag !== "FormData") throw new Error("Expected multipart audio.");
@@ -29,13 +40,43 @@ function harness(status: number, body: unknown, apiKey: string, language: string
   const layer = VoiceTranscription.layer.pipe(
     Layer.provide(ServerSettings.layerTest({ voiceInput: { apiKey, language } })),
     Layer.provide(Layer.succeed(HttpClient.HttpClient, http)),
+    Layer.provide(
+      ServerConfig.layerTest(process.cwd(), archive?.baseDir ?? { prefix: "t3code-voice-test-" }),
+    ),
+    Layer.provide(
+      ConfigProvider.layer(
+        ConfigProvider.fromEnv({
+          env: archive?.enabled ? { T3CODE_VOICE_RECORDINGS: "true" } : {},
+        }),
+      ),
+    ),
+    Layer.provide(NodeServices.layer),
   );
   const run = (recording: VoiceTranscriptionInput) =>
     Effect.gen(function* () {
       return yield* (yield* VoiceTranscription.VoiceTranscription).transcribe(recording);
     }).pipe(Effect.result, Effect.provide(layer));
-  return { run, requests };
+  const outcome = (recordingIds: ReadonlyArray<string>, sentText: string) =>
+    Effect.gen(function* () {
+      yield* (yield* VoiceTranscription.VoiceTranscription).recordOutcome({
+        recordingIds,
+        sentText,
+      });
+    }).pipe(Effect.provide(layer));
+  return { run, outcome, requests };
 }
+
+const readArchive = (baseDir: string, id: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = path.join(baseDir, "userdata", "voice-recordings");
+    return {
+      files: (yield* fs.readDirectory(directory)).toSorted(),
+      metadata: JSON.parse(yield* fs.readFileString(path.join(directory, `${id}.json`))),
+      audio: yield* fs.readFile(path.join(directory, `${id}.webm`)),
+    };
+  }).pipe(Effect.provide(NodeServices.layer));
 
 describe("voice transcription", () => {
   it.effect("forwards audio and the selected language and returns trimmed text", () =>
@@ -93,6 +134,63 @@ describe("voice transcription", () => {
         const h = harness(200, body, "test-key", "");
         expect(yield* h.run(input)).toMatchObject({ _tag: "Failure" });
       }),
+  );
+  it.effect("keeps nothing on disk unless recordings are enabled", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-voice-off-" });
+      const h = harness(200, { text: "Hello" }, "test-key", "", { baseDir, enabled: false });
+      yield* h.run({ ...input, recording: { id: "recording-off-1" } });
+      expect(yield* fs.exists(`${baseDir}/userdata/voice-recordings`)).toBe(false);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+  it.effect("keeps the original audio, every attempt, and the sent text when enabled", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-voice-archive-" });
+      const recording = {
+        id: "recording-archive-1",
+        threadId: "thread-1",
+        microphone: "Speakerphone",
+        durationMs: 2400,
+      };
+      const failed = harness(200, { text: "  " }, "test-key", "bg", {
+        baseDir,
+        enabled: true,
+      });
+      yield* failed.run({ ...input, recording });
+      const succeeded = harness(
+        200,
+        { text: " Здравей ", language_code: "bul", language_probability: 0.98 },
+        "test-key",
+        "bg",
+        { baseDir, enabled: true },
+      );
+      yield* succeeded.run({ ...input, recording });
+      yield* succeeded.outcome([recording.id], "Здравей, fix the tests");
+
+      const archived = yield* readArchive(baseDir, recording.id);
+      expect(archived.files).toEqual(["recording-archive-1.json", "recording-archive-1.webm"]);
+      expect(Buffer.from(archived.audio).toString()).toBe("recorded audio");
+      expect(archived.metadata).toMatchObject({
+        id: recording.id,
+        mimeType: "audio/webm",
+        threadId: "thread-1",
+        microphone: "Speakerphone",
+        durationMs: 2400,
+        attempts: [
+          { provider: "elevenlabs", model: "scribe_v2", status: "failed", failureReason: "empty" },
+          {
+            status: "transcribed",
+            text: "Здравей",
+            requestedLanguage: "bg",
+            detectedLanguage: "bul",
+            languageProbability: 0.98,
+          },
+        ],
+        outcome: { sentText: "Здравей, fix the tests", transcriptSentUnedited: true },
+      });
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
   it.effect("rejects invalid encoding and oversized audio before forwarding", () =>
     Effect.gen(function* () {
