@@ -2496,7 +2496,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         for (const attachment of attachments) {
           const path = host.resolveAttachmentPath(attachment);
           if (path === null) continue;
-          if (attachment.mimeType.startsWith("image/")) {
+          if (attachment.type === "image" && attachment.mimeType.startsWith("image/")) {
             const bytes = yield* fileSystem.readFile(path);
             images.push({
               type: "image",

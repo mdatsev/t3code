@@ -283,10 +283,15 @@ const layerRelayClient = Layer.unwrap(
   }),
 );
 
+const createHttpServer = () =>
+  guardHttpResponseWriteErrors(
+    NodeHttp.createServer({ requestTimeout: 0, headersTimeout: 60_000 }),
+  );
+
 const layerHttpServer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
-    return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
+    return NodeHttpServer.layer(createHttpServer, {
       host: config.host ?? "127.0.0.1",
       port: config.port,
       gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,

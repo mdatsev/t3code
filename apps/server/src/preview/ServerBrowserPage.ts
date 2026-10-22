@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalTimers:off - Playwright callbacks run outside the Effect runtime.
 
 import {
-  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES,
   type PreviewAutomationClickInput,
   type PreviewAutomationConsoleEntry,
   type PreviewAutomationDragInput,
@@ -594,7 +594,7 @@ export const RECORDING_ENCODER_SCRIPT = `(() => {
         recorder.ondataavailable = (event) => {
           if (tooLarge || event.data.size === 0) return;
           sizeBytes += event.data.size;
-          if (sizeBytes > ${PROVIDER_SEND_TURN_MAX_FILE_BYTES}) {
+          if (sizeBytes > ${PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES}) {
             tooLarge = true;
             chunks.length = 0;
             clearInterval(ringTimer);
