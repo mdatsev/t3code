@@ -1,5 +1,6 @@
 import { VoiceInputControl } from "../../voice-input/VoiceInputControl";
 import type { VoiceInputController } from "@t3tools/client-runtime/voice-input";
+import { reportVoiceRecordingOutcome } from "../../state/voiceInput";
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
@@ -1903,6 +1904,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const voiceDraftRevision = useRef(0);
   const voiceInputControllerRef = useRef<VoiceInputController | null>(null);
   const [voiceSubmissionPending, setVoiceSubmissionPending] = useState(false);
+  const voiceRecordingIdsRef = useRef<{ targetKey: string; ids: string[] }>({
+    targetKey: "",
+    ids: [],
+  });
+  const reportVoiceOutcome = useAtomCommand(reportVoiceRecordingOutcome, {
+    reportFailure: false,
+    reportDefect: false,
+  });
   const composerImages = attachmentDraft.images;
   const composerFiles = attachmentDraft.files;
   // A question answer has no chips: its files live in the question draft and show in the
@@ -4227,6 +4236,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       });
       return;
     }
+    const promptAtSubmit = promptRef.current;
     const submission = submitComposerDraft({
       prompt: promptRef.current,
       submissionTarget: activePendingProgress ? "pending-user-input" : "provider-turn",
@@ -4250,6 +4260,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     setComposerSubmissionError(submission.validationMessage);
     if (!submission.didDispatch) return;
+    const voiceRecordings = voiceRecordingIdsRef.current;
+    if (voiceRecordings.targetKey === composerDraftTargetKey && voiceRecordings.ids.length > 0) {
+      void reportVoiceOutcome({
+        environmentId,
+        input: { recordingIds: voiceRecordings.ids, sentText: promptAtSubmit },
+      });
+    }
+    voiceRecordingIdsRef.current = { targetKey: composerDraftTargetKey, ids: [] };
     onTypingGuardSend();
     if (shouldBlurMobileComposerOnSubmit()) {
       blurMobileComposerAfterSend();
@@ -7662,6 +7680,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       }}
                       onBusyChange={setVoiceInputBusy}
                       controllerRef={voiceInputControllerRef}
+                      threadId={activeThreadId}
+                      onRecordingCommitted={(recordingId) => {
+                        const current = voiceRecordingIdsRef.current;
+                        voiceRecordingIdsRef.current = {
+                          targetKey: composerDraftTargetKey,
+                          ids:
+                            current.targetKey === composerDraftTargetKey
+                              ? [...current.ids, recordingId]
+                              : [recordingId],
+                        };
+                      }}
                     />
                   )}
                   <ComposerFooterPrimaryActions

@@ -4,6 +4,10 @@ Transcription edits a composer draft. It does not submit an agent turn. Audio is
 temporary client input, and only normal message submission sends the resulting
 text. Supported iOS devices transcribe locally. The web composer sends recorded
 audio through the selected environment to ElevenLabs, using its server-side key.
+With `T3CODE_VOICE_RECORDINGS=true`, the [server archive](../../apps/server/src/voice/VoiceRecordingArchive.ts)
+keeps that audio and every attempt's result keyed by a client-chosen recording id,
+so retries of one recording share one entry and the sent text can be attached later.
+Archive failures are logged and never fail a transcription.
 
 The [shared controller](../../packages/client-runtime/src/voice-input/controller.ts)
 owns the operation while the client supplies capture and transcription. Preparation

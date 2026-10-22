@@ -60,6 +60,8 @@ function microphoneOpenProblem(error: unknown): string | null {
 /** Owns the microphone even when permission resolves after cancellation. */
 export class BrowserVoiceRecorder implements VoiceRecorder {
   uri: string | null = null;
+  durationMs: number | null = null;
+  private startedAt = 0;
   private stream: MediaStream | null = null;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -168,6 +170,7 @@ export class BrowserVoiceRecorder implements VoiceRecorder {
       "stop",
       () => {
         clearTimeout(this.timer);
+        this.durationMs = Date.now() - this.startedAt;
         this.uri = URL.createObjectURL(new Blob(this.chunks, { type: mimeType }));
         this.chunks = [];
         this.releaseMicrophone();
@@ -187,6 +190,8 @@ export class BrowserVoiceRecorder implements VoiceRecorder {
     if (!this.recorder) throw new Error("Recorder not prepared.");
     this.recorder.start(1000);
     this.started = true;
+    this.startedAt = Date.now();
+    this.durationMs = null;
     this.monitorSilence(this.recorder.stream);
     this.timer = setTimeout(() => {
       void this.stop().catch(() => {});

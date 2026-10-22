@@ -15,6 +15,7 @@ import { Button } from "../components/ui/button";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useEnvironmentPresentation } from "../state/presentation";
 import { BrowserVoiceRecorder } from "./browserRecorder";
+import { randomUUID } from "../lib/utils";
 
 const failureMessages = {
   "not-configured": "Add an ElevenLabs API key in General → Voice input.",
@@ -33,6 +34,8 @@ type VoiceInputControlProps = {
   commitDraft: (text: string, selection: { start: number; end: number }) => void;
   onBusyChange: (busy: boolean) => void;
   controllerRef: RefObject<VoiceInputController | null>;
+  threadId: string | null;
+  onRecordingCommitted: (recordingId: string) => void;
 };
 
 export function VoiceInputControl(props: VoiceInputControlProps) {
@@ -73,6 +76,8 @@ function VoiceInputSession(
   const readDraft = useStableCallback(props.readDraft);
   const commitDraft = useStableCallback(props.commitDraft);
   const onBusyChange = useStableCallback(props.onBusyChange);
+  const onRecordingCommitted = useStableCallback(props.onRecordingCommitted);
+  const readThreadId = useStableCallback(() => props.threadId);
   const transcribe = useAtomCommand(transcribeVoice, { reportFailure: false, reportDefect: false });
   const supported =
     typeof MediaRecorder !== "undefined" &&
@@ -80,12 +85,16 @@ function VoiceInputSession(
 
   useEffect(() => {
     if (!supported) return;
+    const recordingIds = new Map<string, string>();
+    let microphoneLabel: string | null = null;
+    let transcribedRecordingId: string | null = null;
     const recorder = new BrowserVoiceRecorder(
       (status) => {
         void controller.handleRecorderStatus(status);
       },
       {
         onMicrophone: (label) => {
+          microphoneLabel = label;
           if (mounted) setMicrophone(label);
         },
         onProblem: (problem) => {
@@ -97,7 +106,11 @@ function VoiceInputSession(
     const controller = new VoiceInputController({
       recorder,
       readDraft,
-      commitDraft,
+      commitDraft: (text, selection) => {
+        commitDraft(text, selection);
+        if (transcribedRecordingId) onRecordingCommitted(transcribedRecordingId);
+        transcribedRecordingId = null;
+      },
       requestPermission: () => recorder.requestPermission(),
       configureRecording: () => Promise.resolve(),
       releaseRecording: () => {
@@ -142,9 +155,27 @@ function VoiceInputSession(
                   const mime = blob.type.split(";")[0];
                   if (mime !== "audio/webm" && mime !== "audio/ogg" && mime !== "audio/mp4")
                     throw new Error("Unsupported audio.");
+                  const recordingId = recordingIds.get(uri) ?? randomUUID();
+                  recordingIds.set(uri, recordingId);
+                  const threadId = readThreadId();
                   const result = await transcribe({
                     environmentId: props.environmentId,
-                    input: { recording: { audio, mimeType: mime }, signal },
+                    input: {
+                      recording: {
+                        audio,
+                        mimeType: mime,
+                        recording: {
+                          id: recordingId,
+                          draftKey: props.ownerKey,
+                          ...(threadId ? { threadId } : {}),
+                          ...(microphoneLabel ? { microphone: microphoneLabel } : {}),
+                          ...(recorder.durationMs !== null
+                            ? { durationMs: recorder.durationMs }
+                            : {}),
+                        },
+                      },
+                      signal,
+                    },
                   });
                   if (signal.aborted) throw new Error("Recording cancelled.");
                   if (result._tag === "Failure") {
@@ -155,6 +186,7 @@ function VoiceInputSession(
                     if (mounted) setFailure(failureMessages[result.value.reason]);
                     throw new Error("Transcription failed.");
                   }
+                  transcribedRecordingId = recordingId;
                   return result.value.text;
                 },
               }),
@@ -194,6 +226,9 @@ function VoiceInputSession(
     readDraft,
     commitDraft,
     onBusyChange,
+    onRecordingCommitted,
+    readThreadId,
+    props.ownerKey,
     transcribe,
   ]);
 

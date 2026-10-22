@@ -1,4 +1,8 @@
-import { VoiceTranscriptionInput, VoiceTranscriptionResult } from "./voiceInput.ts";
+import {
+  VoiceRecordingOutcomeInput,
+  VoiceTranscriptionInput,
+  VoiceTranscriptionResult,
+} from "./voiceInput.ts";
 import * as Context from "effect/Context";
 import type * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
@@ -773,14 +777,22 @@ class EnvironmentWebhooksHttpApi extends HttpApiGroup.make("webhooks")
   .add(HttpApiEndpoint.patch("webhookPatch", WEBHOOK_PATH, webhookEndpoint))
   .add(HttpApiEndpoint.get("webhookGet", WEBHOOK_PATH, webhookEndpoint)) {}
 
-class EnvironmentVoiceHttpApi extends HttpApiGroup.make("voice").add(
-  HttpApiEndpoint.post("transcribe", "/api/voice/transcribe", {
-    headers: OptionalBearerHeaders,
-    payload: VoiceTranscriptionInput,
-    success: VoiceTranscriptionResult,
-    error: EnvironmentScopedOperationErrors,
-  }).middleware(EnvironmentAuthenticatedAuth),
-) {}
+class EnvironmentVoiceHttpApi extends HttpApiGroup.make("voice")
+  .add(
+    HttpApiEndpoint.post("transcribe", "/api/voice/transcribe", {
+      headers: OptionalBearerHeaders,
+      payload: VoiceTranscriptionInput,
+      success: VoiceTranscriptionResult,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("recordingOutcome", "/api/voice/recordings/outcome", {
+      headers: OptionalBearerHeaders,
+      payload: VoiceRecordingOutcomeInput,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  ) {}
 
 export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentVoiceHttpApi)
