@@ -1,4 +1,5 @@
 import {
+  VoiceDiagnosticsInput,
   VoiceRecordingOutcomeInput,
   VoiceTranscriptionInput,
   VoiceTranscriptionResult,
@@ -790,6 +791,13 @@ class EnvironmentVoiceHttpApi extends HttpApiGroup.make("voice")
     HttpApiEndpoint.post("recordingOutcome", "/api/voice/recordings/outcome", {
       headers: OptionalBearerHeaders,
       payload: VoiceRecordingOutcomeInput,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("diagnostics", "/api/voice/diagnostics", {
+      headers: OptionalBearerHeaders,
+      payload: VoiceDiagnosticsInput,
       error: EnvironmentScopedOperationErrors,
     }).middleware(EnvironmentAuthenticatedAuth),
   ) {}

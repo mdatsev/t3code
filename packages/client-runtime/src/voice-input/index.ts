@@ -19,4 +19,8 @@ export {
   type VoiceTranscriptionOptions,
 } from "./transcription.ts";
 
-export { createVoiceRecordingOutcomeCommand, createVoiceTranscriptionCommand } from "./command.ts";
+export {
+  createVoiceDiagnosticsCommand,
+  createVoiceRecordingOutcomeCommand,
+  createVoiceTranscriptionCommand,
+} from "./command.ts";

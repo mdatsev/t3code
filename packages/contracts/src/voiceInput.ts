@@ -15,6 +15,25 @@ export const VoiceRecordingOutcomeInput = Schema.Struct({
   sentText: Schema.String.check(Schema.isMaxLength(200_000)),
 });
 export type VoiceRecordingOutcomeInput = typeof VoiceRecordingOutcomeInput.Type;
+const VoiceDiagnosticValue = Schema.Union([
+  Schema.String.check(Schema.isMaxLength(2_000)),
+  Schema.Number,
+  Schema.Boolean,
+  Schema.Null,
+]);
+export const VoiceDiagnosticEvent = Schema.Struct({
+  at: Schema.String.check(Schema.isMaxLength(40)),
+  event: Schema.String.check(Schema.isMaxLength(64)),
+  recordingId: Schema.optionalKey(VoiceRecordingId),
+  details: Schema.optionalKey(Schema.Record(Schema.String, VoiceDiagnosticValue)),
+});
+export type VoiceDiagnosticEvent = typeof VoiceDiagnosticEvent.Type;
+export const VoiceDiagnosticsInput = Schema.Struct({
+  sessionId: VoiceRecordingId,
+  userAgent: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(512))),
+  events: Schema.Array(VoiceDiagnosticEvent).check(Schema.isMinLength(1), Schema.isMaxLength(200)),
+});
+export type VoiceDiagnosticsInput = typeof VoiceDiagnosticsInput.Type;
 export const VoiceTranscriptionInput = Schema.Struct({
   audio: Schema.String.check(
     Schema.isMinLength(4),
