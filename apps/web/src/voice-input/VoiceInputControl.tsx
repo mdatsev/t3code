@@ -10,12 +10,13 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { useAtomCommand } from "../state/use-atom-command";
-import { transcribeVoice } from "../state/voiceInput";
+import { reportVoiceDiagnostics, transcribeVoice } from "../state/voiceInput";
 import { Button } from "../components/ui/button";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useEnvironmentPresentation } from "../state/presentation";
 import { BrowserVoiceRecorder } from "./browserRecorder";
 import { randomUUID } from "../lib/utils";
+import { VoiceDiagnosticsQueue } from "./voiceDiagnostics";
 
 const failureMessages = {
   "not-configured": "Add an ElevenLabs API key in General → Voice input.",
@@ -79,12 +80,21 @@ function VoiceInputSession(
   const onRecordingCommitted = useStableCallback(props.onRecordingCommitted);
   const readThreadId = useStableCallback(() => props.threadId);
   const transcribe = useAtomCommand(transcribeVoice, { reportFailure: false, reportDefect: false });
+  const sendDiagnostics = useAtomCommand(reportVoiceDiagnostics, {
+    reportFailure: false,
+    reportDefect: false,
+  });
+  const diagnosticsRef = useRef<VoiceDiagnosticsQueue | null>(null);
   const supported =
     typeof MediaRecorder !== "undefined" &&
     typeof navigator.mediaDevices?.getUserMedia === "function";
 
   useEffect(() => {
     if (!supported) return;
+    const diagnostics = new VoiceDiagnosticsQueue((input) => {
+      void sendDiagnostics({ environmentId: props.environmentId, input });
+    });
+    diagnosticsRef.current = diagnostics;
     const recordingIds = new Map<string, string>();
     let microphoneLabel: string | null = null;
     let transcribedRecordingId: string | null = null;
@@ -127,8 +137,10 @@ function VoiceInputSession(
           if (mounted) setMicrophone(label);
         },
         onProblem: (problem) => {
+          if (problem) diagnostics.log("problem.shown", { problem });
           if (mounted) setMicrophoneProblem(problem);
         },
+        onEvent: diagnostics.log,
       },
     );
     let mounted = true;
@@ -187,6 +199,12 @@ function VoiceInputSession(
                   const recordingId = recordingIds.get(uri) ?? randomUUID();
                   recordingIds.set(uri, recordingId);
                   const threadId = readThreadId();
+                  const requestedAt = Date.now();
+                  diagnostics.log(
+                    "transcription.request",
+                    { mimeType: blob.type, bytes: blob.size, durationMs: recorder.durationMs },
+                    recordingId,
+                  );
                   const result = await transcribe({
                     environmentId: props.environmentId,
                     input: {
@@ -206,7 +224,25 @@ function VoiceInputSession(
                       signal,
                     },
                   });
-                  if (signal.aborted) throw new Error("Recording cancelled.");
+                  const latencyMs = Date.now() - requestedAt;
+                  if (signal.aborted) {
+                    diagnostics.log("transcription.cancelled", { latencyMs }, recordingId);
+                    throw new Error("Recording cancelled.");
+                  }
+                  diagnostics.log(
+                    "transcription.response",
+                    result._tag === "Failure"
+                      ? { outcome: "request-failed", latencyMs }
+                      : result.value.status === "failed"
+                        ? { outcome: "failed", reason: result.value.reason, latencyMs }
+                        : {
+                            outcome: "transcribed",
+                            textLength: result.value.text.length,
+                            latencyMs,
+                          },
+                    recordingId,
+                  );
+                  diagnostics.flush();
                   if (result._tag === "Failure") {
                     if (mounted) setFailure(failureMessages.unavailable);
                     throw new Error("Transcription failed.");
@@ -222,6 +258,12 @@ function VoiceInputSession(
             }
           : null,
       onStateChange: (next) => {
+        diagnostics.log("phase", {
+          phase: next.phase,
+          error: next.error,
+          errorAction: next.errorAction,
+        });
+        if (next.phase === "idle" || next.phase === "error") diagnostics.flush();
         keepScreenAwake(next.phase === "preparing" || next.phase === "recording");
         if (next.phase === "idle" || next.phase === "error") recorder.releaseMicrophone();
         if (!mounted) return;
@@ -235,6 +277,11 @@ function VoiceInputSession(
     const sharedControllerRef = props.controllerRef;
     sharedControllerRef.current = controller;
     const background = () => {
+      if (controller.currentState.phase !== "idle")
+        diagnostics.log("visibility", {
+          visibility: document.visibilityState,
+          phase: controller.currentState.phase,
+        });
       if (!document.hidden) return;
       if (controller.currentState.phase === "recording") void controller.stop();
       else void controller.appMovedToBackground();
@@ -242,6 +289,8 @@ function VoiceInputSession(
     document.addEventListener("visibilitychange", background);
     return () => {
       mounted = false;
+      diagnostics.flush();
+      if (diagnosticsRef.current === diagnostics) diagnosticsRef.current = null;
       keepScreenAwake(false);
       controller.dispose();
       recorder.releaseMicrophone();
@@ -263,6 +312,7 @@ function VoiceInputSession(
     readThreadId,
     props.ownerKey,
     transcribe,
+    sendDiagnostics,
   ]);
 
   useEffect(() => {
@@ -293,6 +343,7 @@ function VoiceInputSession(
           onClick={() => {
             setFailure(null);
             setMicrophoneProblem(null);
+            diagnosticsRef.current?.startSession();
             void controllerRef.current?.start();
           }}
         >
