@@ -31,7 +31,8 @@ import { readEnvironmentScope, readPreparedConnection } from "../state/session";
 import type { AttachmentUploadState, ReadyAttachmentUpload } from "./attachmentUploadState";
 
 const MAX_UPLOADS_PER_ENVIRONMENT = 3;
-const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+const MIN_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+const SLOWEST_UPLOAD_BYTES_PER_MS = 32;
 
 interface AttachmentUploadStore {
   readonly uploadsByImageId: Readonly<Record<string, AttachmentUploadState>>;
@@ -157,7 +158,10 @@ function uploadBytes(input: {
   const xhr = new XMLHttpRequest();
   const done = new Promise<void>((resolve, reject) => {
     xhr.open("POST", input.url, true);
-    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.timeout = Math.max(
+      MIN_UPLOAD_TIMEOUT_MS,
+      Math.ceil(input.file.size / SLOWEST_UPLOAD_BYTES_PER_MS),
+    );
     xhr.setRequestHeader("Content-Type", input.mimeType);
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable && event.total > 0) {

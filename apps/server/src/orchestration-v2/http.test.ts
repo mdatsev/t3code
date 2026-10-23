@@ -11,7 +11,7 @@ import {
   OrchestrationV2AppThread,
   OrchestrationV2TurnItem,
   OrchestrationV2ThreadTranscript,
-  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES,
   ThreadId,
 } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
@@ -199,7 +199,8 @@ it.effect("exports full history with size, scope, and missing-thread checks", ()
         (size, row) => size + Buffer.byteLength(`${JSON.stringify(row)}\n`, "utf8"),
         0,
       );
-    const boundaryOutput = "界" + "x".repeat(PROVIDER_SEND_TURN_MAX_FILE_BYTES - baseSize - 3);
+    const boundaryOutput =
+      "界" + "x".repeat(PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES - baseSize - 3);
     for (const [suffix, expectedStatus] of [
       ["", 200],
       ["x", 400],

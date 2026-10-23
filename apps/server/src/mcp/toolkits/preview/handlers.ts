@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import {
-  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES,
   PREVIEW_RECORDING_STOP_TIMEOUT_MS,
   PreviewAutomationRecordingTransferError,
   PreviewAutomationRecordingDesktopUpdateRequiredError,
@@ -168,7 +168,7 @@ export const claimPreviewRecording = Effect.fn("PreviewToolkit.claimRecording")(
           stat.type === "File" &&
           Number(stat.size) === artifact.sizeBytes &&
           artifact.sizeBytes > 0 &&
-          artifact.sizeBytes <= PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+          artifact.sizeBytes <= PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES,
         () => new PreviewAutomationRecordingTransferError({ threadId }),
       ),
     );

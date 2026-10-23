@@ -27,7 +27,7 @@ import {
   type OrchestrationV2ThreadShell,
   type OrchestrationV2TurnItem,
   ProjectId,
-  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES,
   ProviderInstanceId,
   resolveProjectProviderInstanceEnabled,
   RunId,
@@ -662,12 +662,12 @@ const make = Effect.gen(function* () {
         threadTranscriptHeader(yield* environment.getEnvironmentId, transcript),
         "utf8",
       );
-      if (sizeBytes > PROVIDER_SEND_TURN_MAX_FILE_BYTES) {
+      if (sizeBytes > PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES) {
         return yield* new ThreadTranscriptTooLargeError({ threadId });
       }
       for (const row of transcript.items) {
         sizeBytes += projectedRowEncodedBytes(row) + 1;
-        if (sizeBytes > PROVIDER_SEND_TURN_MAX_FILE_BYTES) {
+        if (sizeBytes > PROVIDER_SEND_TURN_MAX_BUFFERED_FILE_BYTES) {
           return yield* new ThreadTranscriptTooLargeError({ threadId });
         }
       }
