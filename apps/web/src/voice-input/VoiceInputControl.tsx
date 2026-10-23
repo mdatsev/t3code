@@ -88,6 +88,35 @@ function VoiceInputSession(
     const recordingIds = new Map<string, string>();
     let microphoneLabel: string | null = null;
     let transcribedRecordingId: string | null = null;
+    let wakeLock: WakeLockSentinel | null = null;
+    let wakeLockWanted = false;
+    let wakeLockPending = false;
+    const keepScreenAwake = (wanted: boolean) => {
+      wakeLockWanted = wanted;
+      if (!wanted) {
+        void wakeLock?.release().catch(() => {});
+        wakeLock = null;
+        return;
+      }
+      if (wakeLock || wakeLockPending || !navigator.wakeLock || document.hidden) return;
+      wakeLockPending = true;
+      navigator.wakeLock
+        .request("screen")
+        .then((sentinel) => {
+          if (!wakeLockWanted) {
+            void sentinel.release().catch(() => {});
+            return;
+          }
+          wakeLock = sentinel;
+          sentinel.addEventListener("release", () => {
+            if (wakeLock === sentinel) wakeLock = null;
+          });
+        })
+        .catch(() => {})
+        .finally(() => {
+          wakeLockPending = false;
+        });
+    };
     const recorder = new BrowserVoiceRecorder(
       (status) => {
         void controller.handleRecorderStatus(status);
@@ -193,6 +222,7 @@ function VoiceInputSession(
             }
           : null,
       onStateChange: (next) => {
+        keepScreenAwake(next.phase === "preparing" || next.phase === "recording");
         if (next.phase === "idle" || next.phase === "error") recorder.releaseMicrophone();
         if (!mounted) return;
         if (next.phase === "recording") setElapsed(0);
@@ -205,11 +235,14 @@ function VoiceInputSession(
     const sharedControllerRef = props.controllerRef;
     sharedControllerRef.current = controller;
     const background = () => {
-      if (document.hidden) void controller.appMovedToBackground();
+      if (!document.hidden) return;
+      if (controller.currentState.phase === "recording") void controller.stop();
+      else void controller.appMovedToBackground();
     };
     document.addEventListener("visibilitychange", background);
     return () => {
       mounted = false;
+      keepScreenAwake(false);
       controller.dispose();
       recorder.releaseMicrophone();
       controllerRef.current = null;
