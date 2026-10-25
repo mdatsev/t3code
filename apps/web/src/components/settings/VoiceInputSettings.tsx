@@ -55,7 +55,7 @@ export function VoiceInputSettings() {
         serverScoped
         settingKeys={["voiceInput"]}
         title="Transcription language"
-        description="Leave empty for automatic detection, or enter a language code such as en or bg. Recordings stop after five minutes."
+        description="Leave empty for automatic detection, or enter a language code such as en or bg. Recordings stop after 30 minutes."
         control={
           <DraftInput
             size="sm"

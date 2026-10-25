@@ -2,7 +2,7 @@ import { replaceTextRange } from "@t3tools/shared/composerTrigger";
 
 import type { PreparedVoiceTranscription, VoiceTranscriber } from "./transcription.ts";
 
-export const VOICE_RECORDING_LIMIT_SECONDS = 5 * 60;
+export const VOICE_RECORDING_LIMIT_SECONDS = 30 * 60;
 
 export type VoiceInputPhase = "idle" | "preparing" | "recording" | "transcribing" | "error";
 

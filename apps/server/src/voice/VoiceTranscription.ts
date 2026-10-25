@@ -68,7 +68,7 @@ const make = Effect.gen(function* () {
         language,
       ).pipe(
         Effect.timeoutOrElse({
-          duration: "90 seconds",
+          duration: "5 minutes",
           orElse: () => Effect.fail(new VoiceTranscriptionError({ reason: "unavailable" })),
         }),
         Effect.result,
