@@ -276,17 +276,17 @@ function VoiceInputSession(
     controllerRef.current = controller;
     const sharedControllerRef = props.controllerRef;
     sharedControllerRef.current = controller;
-    const background = () => {
-      if (controller.currentState.phase !== "idle")
-        diagnostics.log("visibility", {
-          visibility: document.visibilityState,
-          phase: controller.currentState.phase,
-        });
-      if (!document.hidden) return;
-      if (controller.currentState.phase === "recording") void controller.stop();
-      else void controller.appMovedToBackground();
+    const visibilityChanged = () => {
+      const phase = controller.currentState.phase;
+      if (phase !== "idle")
+        diagnostics.log("visibility", { visibility: document.visibilityState, phase });
+      if (!document.hidden) {
+        keepScreenAwake(wakeLockWanted);
+        return;
+      }
+      if (phase === "preparing") void controller.appMovedToBackground();
     };
-    document.addEventListener("visibilitychange", background);
+    document.addEventListener("visibilitychange", visibilityChanged);
     return () => {
       mounted = false;
       diagnostics.flush();
@@ -297,7 +297,7 @@ function VoiceInputSession(
       controllerRef.current = null;
       if (sharedControllerRef.current === controller) sharedControllerRef.current = null;
       onBusyChange(false);
-      document.removeEventListener("visibilitychange", background);
+      document.removeEventListener("visibilitychange", visibilityChanged);
     };
   }, [
     supported,
