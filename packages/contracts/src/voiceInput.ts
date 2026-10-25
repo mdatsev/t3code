@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-export const MAX_VOICE_RECORDING_BYTES = 4 * 1024 * 1024;
+export const MAX_VOICE_RECORDING_BYTES = 32 * 1024 * 1024;
 export const VoiceRecordingId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9-]{8,64}$/));
 export const VoiceRecordingContext = Schema.Struct({
   id: VoiceRecordingId,
