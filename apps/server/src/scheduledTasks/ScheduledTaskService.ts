@@ -822,7 +822,6 @@ export const layer = Layer.effect(
                   scheduledTaskId: active.id,
                   text: prompt,
                   attachments: [],
-                  modelSelection: active.modelSelection,
                   // Scheduled prompts must not interrupt tools in the bound thread.
                   mode: "queue",
                   createdBy: active.createdBy,
